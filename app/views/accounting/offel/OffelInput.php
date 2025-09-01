@@ -10,7 +10,7 @@
     </head>
 <body>
     <div class="container mt-4">
-        <h1 class="text-center mb-4 text-primary">Offel Records Input</h1>
+        <h1 class="text-center mb-4 text-primary fw-bold">Offel Records Input</h1>
         <!-- Add Offel Record Button -->
         <div class="mb-2">
             <button type="button" class="btn btn-primary px-4" data-bs-toggle="modal" data-bs-target="#offelModal" id="addOffelBtn"> + Offel Record</button>
@@ -18,7 +18,6 @@
                 <button type="button" class="btn btn-danger px-4"> View Summary</button>
             </div>
         </div>
-
 
         <!-- Modal for Add/Edit Offel Record -->
         <div class="modal fade" id="offelModal" tabindex="-1" aria-labelledby="offelModalLabel" aria-hidden="true">
@@ -31,7 +30,7 @@
                     </div>
                     <!-- Modal Body with Form -->
                     <div class="modal-body">
-                        <form method="POST" class="row g-3" id="offelForm" novalidate>
+                        <form method="POST" class="row g-3" id="offelForm" novalidate autocomplete="off">
                             <!-- Hidden ID for Edit -->
                             <input type="hidden" name="ID" id="ID" />
                             <div class="col-md-12">
@@ -41,13 +40,33 @@
                             </div>
                             <div class="col-md-12">
                                 <label>Input Product: </label>
-                                <input type="text" name="ProductOffel" id="ProductOffel" class="form-control" required/>
-                                <div class="invalid-feedback">Please enter Product.</div>
+                                <select name="ProductOffel" id="ProductOffel" class="form-select" required>
+                                    <option value="">Select Product</option>
+                                    <option value="Tuna">Tuna</option>
+                                    <option value="Sword">Sword</option>
+                                    <option value="Red Snapper">Red Snapper</option>
+                                    <option value="Kingfish">Kingfish</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                                <div class="invalid-feedback">Please select a product.</div>
                             </div>
                             <div class="col-md-12">
                                 <label>Input Type: </label>
-                                <input type="text" name="TypeOffel" id="TypeOffel" class="form-control" required/>
-                                <div class="invalid-feedback">Please enter Product Type.</div>
+                                <select name="TypeOffel" id="TypeOffel" class="form-select" required>
+                                    <option value="">Select Type</option>
+                                    <option value="Loin">Loin</option>
+                                    <option value="Off Cut">Off Cut</option>
+                                    <option value="Trimming">Trimming</option>
+                                    <option value="Black Meat">Black Meat</option>
+                                    <option value="Belly Flap">Belly Flap</option>
+                                    <option value="Skin">Skin</option>
+                                    <option value="Head and Bones">Head and Bones</option>
+                                    <option value="Egg">Egg</option>
+                                    <option value="Steak">Steak</option>
+                                    <option value="Head">Head</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                                <div class="invalid-feedback">Please select a type.</div>
                             </div>
                             <div class="col-md-12">
                                 <label>Input Buyer: </label>
@@ -56,19 +75,18 @@
                             </div>
                             <div class="col-md-12">
                                 <label>Input KG: </label>
-                                <input type="number" name="KGOffel" id="KGOffel" class="form-control" required/>
+                                <input type="number" name="KGOffel" id="KGOffel" class="form-control" min="0" step="any" required/>
                                 <div class="invalid-feedback">Please enter Kg Available.</div>
                             </div>
                             <div class="col-md-12">
                                 <label>Input Price: </label>
-                                <input type="number" name="PriceOffel" id="PriceOffel" class="form-control" required/>
+                                <input type="number" name="PriceOffel" id="PriceOffel" class="form-control" min="0" step="any" required/>
                                 <div class="invalid-feedback">Please enter Price per Kg.</div>
                             </div>
                             <div class="col-md-12">
                                 <label>Remarks: </label>
                                 <input type="text" name="RemarkOffel" id="RemarkOffel" class="form-control" />
                             </div>
-                        </div>
                         <!-- Modal Footer with Submit Button -->
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
@@ -79,70 +97,96 @@
                 </div>
             </div>
         </div>
-        <!-- Offel Records Table -->
+
+        <!-- Offel Records Table seperation container-->
+        <?php
+        // Define all possible products for tabs (edit this list as needed)
+        $allProducts = ['Tuna', 'Sword', 'Red Snapper', 'Kingfish', 'Other'];
+
+        // Get all unique products from the database
+        $productResult = $conn->query("SELECT DISTINCT Product FROM offelsystem");
+        $productsInDb = [];
+        while ($row = $productResult->fetch_assoc()) {
+            $productsInDb[] = $row['Product'];
+        }
+        // Use all possible products for tabs, not just those in DB
+        $products = $allProducts;
+        ?>
         <div class="container mt-4">
-        <?php $result = $conn->query("SELECT * FROM offelsystem ORDER BY Product ASC");?>
-        <div class="card shadow p-4 mb-4">
-            <h4 class="mb-3 text-secondary">Offel Records Tuna</h4>
-            <h5>Total Tuna Income: 
-                <?php 
-                    $totalIncome = 0;
-                    $incomeResult = $conn->query("SELECT Kg, Price FROM offelsystem");
-                    while ($incomeRow = $incomeResult->fetch_assoc()) {
-                        $totalIncome += $incomeRow['Kg'] * $incomeRow['Price'];
-                    }
-                    echo 'LKR ' . number_format($totalIncome, 2);
-                ?>
-                </h5>
-                <div class="table-responsive">
-                    <table class="table table-striped table-hover text-center align-middle table-bordered">
-                        <thead class="table-dark ">
-                            <tr>
-                                <th>Date</th>
-                                <th>Product</th>
-                                <th>Type</th>
-                                <th>Buyer</th>
-                                <th>Kg</th>
-                                <th>Price</th>
-                                <th>Total</th>
-                                <th>Remark</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                        <?php while($row = $result->fetch_assoc()) { ?>
-                            <tr 
-                                data-id="<?= $row['ID'] ?>"
-                                data-date="<?= htmlspecialchars($row['Date']) ?>"
-                                data-product="<?= htmlspecialchars($row['Product']) ?>"
-                                data-type="<?= htmlspecialchars($row['Type']) ?>"
-                                data-buyer="<?= htmlspecialchars($row['Buyer']) ?>"
-                                data-kg="<?= htmlspecialchars($row['Kg']) ?>"
-                                data-price="<?= htmlspecialchars($row['Price']) ?>"
-                                data-remark="<?= htmlspecialchars($row['Remark']) ?>"
-                            >
-                                <td><?php echo $row['Date']; ?></td>
-                                <td><?php echo $row['Product']; ?></td>
-                                <td><?php echo $row['Type']; ?></td>
-                                <td><?php echo $row['Buyer']; ?></td>
-                                <td><?php echo $row['Kg']; ?></td>
-                                <td><?php echo $row['Price']; ?></td>
-                                <td><?php echo $row['Kg'] * $row['Price']; ?></td>
-                                <td><?php echo $row['Remark']; ?></td>
-                                <td>
-                                    <!-- Edit Button: triggers modal and fills form -->
-                                    <button type="button" class="btn btn-warning btn-edit btn-sm" data-bs-toggle="modal" data-bs-target="#offelModal">Edit</button>
-                                    <!-- Delete Button: submits form to delete record -->
-                                    <form method='post' class='d-inline'>
-                                        <input type='hidden' name='id' value='<?= $row['ID'] ?>'>
-                                        <button type='submit' name='delete_input' class="btn btn-danger btn-sm" onclick="return confirm('Delete this record?')">Delete</button>
-                                    </form>
-                                </td>
-                            </tr>
-                        <?php } ?>
-                        </tbody>
-                    </table>
+            <!-- Product Tabs -->
+            <ul class="nav nav-tabs mb-4" id="productTab" role="tablist">
+                <?php foreach ($products as $i => $product): ?>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link<?= $i === 0 ? ' active' : '' ?>" id="tab-<?= $i ?>" data-bs-toggle="tab" data-bs-target="#tab-pane-<?= $i ?>" type="button" role="tab" aria-controls="tab-pane-<?= $i ?>" aria-selected="<?= $i === 0 ? 'true' : 'false' ?>">
+                        <?= htmlspecialchars($product) ?>
+                    </button>
+                </li>
+                <?php endforeach; ?>
+            </ul>
+            <div class="tab-content" id="productTabContent">
+                <?php foreach ($products as $i => $product): ?>
+                <div class="tab-pane fade<?= $i === 0 ? ' show active' : '' ?>" id="tab-pane-<?= $i ?>" role="tabpanel" aria-labelledby="tab-<?= $i ?>">
+                    <?php
+                    $tableResult = $conn->query("SELECT * FROM offelsystem WHERE Product='" . $conn->real_escape_string($product) . "' ORDER BY Date DESC");
+                    ?>
+                    <div class="card shadow p-4 mb-4">
+                        <h4 class="mb-3 text-secondary">Offel Records <?= htmlspecialchars($product) ?></h4>
+                        <div class="table-responsive">
+                            <?php if ($tableResult->num_rows > 0): ?>
+                            <table class="table table-striped table-hover text-center align-middle table-bordered">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Product</th>
+                                        <th>Type</th>
+                                        <th>Buyer</th>
+                                        <th>Kg</th>
+                                        <th>Price</th>
+                                        <th>Total</th>
+                                        <th>Remark</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                <?php while($row = $tableResult->fetch_assoc()) { ?>
+                                    <tr 
+                                        data-id="<?= $row['ID'] ?>"
+                                        data-date="<?= htmlspecialchars($row['Date']) ?>"
+                                        data-product="<?= htmlspecialchars($row['Product']) ?>"
+                                        data-type="<?= htmlspecialchars($row['Type']) ?>"
+                                        data-buyer="<?= htmlspecialchars($row['Buyer']) ?>"
+                                        data-kg="<?= htmlspecialchars($row['Kg']) ?>"
+                                        data-price="<?= htmlspecialchars($row['Price']) ?>"
+                                        data-remark="<?= htmlspecialchars($row['Remark']) ?>"
+                                    >
+                                        <td><?= $row['Date'] ?></td>
+                                        <td><?= $row['Product'] ?></td>
+                                        <td><?= $row['Type'] ?></td>
+                                        <td><?= $row['Buyer'] ?></td>
+                                        <td><?= $row['Kg'] ?></td>
+                                        <td><?= $row['Price'] ?></td>
+                                        <td><?= $row['Kg'] * $row['Price'] ?></td>
+                                        <td><?= $row['Remark'] ?></td>
+                                        <td>
+                                            <!-- Edit Button: triggers modal and fills form -->
+                                            <button type="button" class="btn btn-warning btn-edit btn-sm" data-bs-toggle="modal" data-bs-target="#offelModal">Edit</button>
+                                            <!-- Delete Button: submits form to delete record -->
+                                            <form method='post' class='d-inline'>
+                                                <input type='hidden' name='id' value='<?= $row['ID'] ?>'>
+                                                <button type='submit' name='delete_input' class="btn btn-danger btn-sm" onclick="return confirm('Delete this record?')">Delete</button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                <?php } ?>
+                                </tbody>
+                            </table>
+                            <?php else: ?>
+                                <div class="text-center text-muted py-5">No data available for <?= htmlspecialchars($product) ?>.</div>
+                            <?php endif; ?>
+                        </div>
+                    </div>
                 </div>
+                <?php endforeach; ?>
             </div>
         </div>
     </div>

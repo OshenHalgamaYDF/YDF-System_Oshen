@@ -41,4 +41,16 @@ if (isset($_POST['SubmitOffel'])) {
     
     $stmt->close();
 }
+
+// Handle Delete
+if (isset($_POST['delete_input']) && isset($_POST['id'])) {
+    $id = $_POST['id'];
+    $stmt = $conn->prepare("DELETE FROM offelsystem WHERE ID = ?");
+    $stmt->bind_param("i", $id);
+    $stmt->execute();
+    $stmt->close();
+    // Redirect to avoid resubmission on refresh
+    header("Location: OffelInput.php");
+    exit();
+}
 ?>
