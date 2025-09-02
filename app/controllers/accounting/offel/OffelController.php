@@ -53,4 +53,21 @@ if (isset($_POST['delete_input']) && isset($_POST['id'])) {
     header("Location: OffelInput.php");
     exit();
 }
+
+// Get latest date from DB
+$latestDateResult = $conn->query("SELECT MAX(Date) as LatestDate FROM offelsystem");
+$latestDateRow = $latestDateResult->fetch_assoc();
+$latestDate = $latestDateRow['LatestDate'] ?? date('Y-m-d');
+
+// Define all possible products for tabs
+$allProducts = ['Tuna', 'Sword', 'Red Snapper', 'Kingfish', 'Other'];
+
+// Get all unique products from DB (not strictly needed since using allProducts)
+$productResult = $conn->query("SELECT DISTINCT Product FROM offelsystem");
+$productsInDb = [];
+while ($row = $productResult->fetch_assoc()) {
+    $productsInDb[] = $row['Product'];
+}
+$products = $allProducts;
+
 ?>
