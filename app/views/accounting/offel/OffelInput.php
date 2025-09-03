@@ -18,9 +18,41 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\offel\Offel
     <h1 class="text-center mb-4 text-primary fw-bold">Offel Records Input</h1>
     <!-- Add Offel Record Button -->
     <div class="mb-2">
-        <button type="button" class="btn btn-primary px-4" data-bs-toggle="modal" data-bs-target="#offelModal" id="addOffelBtn"> + Offel Record</button>
+        <button type="button" class="btn btn-primary px-4" data-bs-toggle="modal" data-bs-target="#offelModal" id="addOffelBtn"> + Offel Record Input</button>
         <div class="mx-2 d-inline">
-            <button type="button" class="btn btn-danger px-4"> View Summary</button>
+            <button type="button" class="btn btn-primary px-4" data-bs-toggle="modal" data-bs-target="#offelModalRecieved" id="addOffelBtn"> + Offel Record Received Amount</button>
+            <button type="button" class="mx-2 btn btn-danger px-4" onclick="window.location.href='OffelIncome.php'"> Calculate the total income recieved</button>
+
+        </div>
+    </div>
+
+    <!-- Modal for Offel Record Received -->
+    <div class="modal fade" id="offelModalRecieved" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog"> 
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Add Offel Record Received Amount</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form method="POST" class="row g-3" id="offelForm" novalidate autocomplete="off">
+                        <div class="col-md-12">
+                            <label>Input Date: </label>
+                            <input type="date" name="RdateOffel" id="RdateOffel" class="form-control" required/>
+                            <div class="invalid-feedback">Please enter a date.</div>
+                        </div>
+                        <div class="col-md-12">
+                            <label>Input Amount: </label>
+                            <input type="number" name="RamountOffel" id="RamountOffel" class="form-control" required/>
+                            <div class="invalid-feedback">Please enter an amount.</div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                            <button type="submit" name="RSubmitOffel" class="btn btn-primary px-4" id="modalSubmitBtn">Add</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
         </div>
     </div>
 

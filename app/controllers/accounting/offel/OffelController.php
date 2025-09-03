@@ -10,6 +10,8 @@ if (mysqli_connect_errno()) {
     die("Connection failed: " . mysqli_connect_error());
 }
 
+$result = $conn->query("SELECT Date, Amount FROM offelrecieved ORDER BY Date DESC");
+
 if (isset($_POST['SubmitOffel'])) {
     $id = $_POST['ID'] ?? '';
     $dateOffel = $_POST['dateOffel'] ?? '';
@@ -41,6 +43,29 @@ if (isset($_POST['SubmitOffel'])) {
     
     $stmt->close();
 }
+
+if (isset($_POST['RSubmitOffel'])) {
+    // Get values safely
+    $date = $_POST['RdateOffel'] ?? '';
+    $amount = $_POST['RamountOffel'] ?? '';
+
+    // Basic validation
+    if (!empty($date) && !empty($amount)) {
+        // Prepare insert
+        $stmt = $conn->prepare("INSERT INTO offelrecieved (`Date`, `Amount`) VALUES (?, ?)");
+        $stmt->bind_param("sd", $date, $amount);  // s = string (date), d = double (amount)
+
+        if ($stmt->execute()) {
+            header("Location: OffelInput.php");
+            exit();
+        } else {
+            echo "Error: " . $stmt->error;
+        }
+        $stmt->close();
+    } 
+}
+
+
 
 // Handle Delete
 if (isset($_POST['delete_input']) && isset($_POST['id'])) {
