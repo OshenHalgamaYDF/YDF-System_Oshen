@@ -21,41 +21,16 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\offel\Offel
         <button type="button" class="btn btn-primary px-4" data-bs-toggle="modal" data-bs-target="#offelModal" id="addOffelBtn"> + Offel Record Input</button>
         <div class="mx-2 d-inline">
             <button type="button" class="btn btn-primary px-4" data-bs-toggle="modal" data-bs-target="#offelModalRecieved" id="addOffelBtn"> + Offel Record Received Amount</button>
-            <button type="button" class="mx-2 btn btn-danger px-4" onclick="window.location.href='OffelIncome.php'"> Calculate the total income recieved</button>
-
+        </div>
+        <br>
+        <div class="mx-2 d-inline">
+            <form method="post" action="">
+                <button type="submit" class="btn btn-danger px-4" name="costshow"> Calculate the total income recieved</button>
+            </form>
         </div>
     </div>
 
-    <!-- Modal for Offel Record Received -->
-    <div class="modal fade" id="offelModalRecieved" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog"> 
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Add Offel Record Received Amount</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <form method="POST" class="row g-3" id="offelForm" novalidate autocomplete="off">
-                        <div class="col-md-12">
-                            <label>Input Date: </label>
-                            <input type="date" name="RdateOffel" id="RdateOffel" class="form-control" required/>
-                            <div class="invalid-feedback">Please enter a date.</div>
-                        </div>
-                        <div class="col-md-12">
-                            <label>Input Amount: </label>
-                            <input type="number" name="RamountOffel" id="RamountOffel" class="form-control" required/>
-                            <div class="invalid-feedback">Please enter an amount.</div>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                            <button type="submit" name="RSubmitOffel" class="btn btn-primary px-4" id="modalSubmitBtn">Add</button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        </div>
-    </div>
-
+    
     <!-- Modal for Add/Edit Offel Record -->
     <div class="modal fade" id="offelModal" tabindex="-1" aria-labelledby="offelModalLabel" aria-hidden="true">
         <div class="modal-dialog">
@@ -128,6 +103,36 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\offel\Offel
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
                             <button type="submit" name="SubmitOffel" class="btn btn-primary px-4" id="modalSubmitBtn">Add</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal for Offel Record Received -->
+    <div class="modal fade" id="offelModalRecieved" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog"> 
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Add Offel Record Received Amount</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form method="POST" class="row g-3" id="offelForm1" novalidate autocomplete="off">
+                        <div class="col-md-12">
+                            <label>Input Date: </label>
+                            <input type="date" name="RdateOffel" id="RdateOffel" class="form-control" required/>
+                            <div class="invalid-feedback">Please enter a date.</div>
+                        </div>
+                        <div class="col-md-12">
+                            <label>Input Amount: </label>
+                            <input type="number" name="RamountOffel" id="RamountOffel" class="form-control" required/>
+                            <div class="invalid-feedback">Please enter an amount.</div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                            <button type="submit" name="RSubmitOffel" class="btn btn-primary px-4" id="modalSubmitBtn">Add</button>
                         </div>
                     </form>
                 </div>
@@ -225,6 +230,14 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\offel\Offel
 <script>
 // Bootstrap validation
 document.getElementById('offelForm').addEventListener('submit', function(event) {
+    if (!this.checkValidity()) {
+        event.preventDefault();
+        event.stopPropagation(); 
+    }
+    this.classList.add('was-validated');
+});
+
+document.getElementById('offelForm1').addEventListener('submit', function(event) {
     if (!this.checkValidity()) {
         event.preventDefault();
         event.stopPropagation(); 

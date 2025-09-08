@@ -10,8 +10,14 @@ if (mysqli_connect_errno()) {
     die("Connection failed: " . mysqli_connect_error());
 }
 
-$result = $conn->query("SELECT Date, Amount FROM offelrecieved ORDER BY Date DESC");
+//Output the table of recieved money
+$result = $conn->query("SELECT *, Amount FROM offelrecieved ORDER BY Date ASC");
 
+//running blanace calculation
+$runningTotalrecived = 0;
+$runningTotalincome = 0;
+
+//input of the submit data
 if (isset($_POST['SubmitOffel'])) {
     $id = $_POST['ID'] ?? '';
     $dateOffel = $_POST['dateOffel'] ?? '';
@@ -65,8 +71,6 @@ if (isset($_POST['RSubmitOffel'])) {
     } 
 }
 
-
-
 // Handle Delete
 if (isset($_POST['delete_input']) && isset($_POST['id'])) {
     $id = $_POST['id'];
@@ -94,5 +98,50 @@ while ($row = $productResult->fetch_assoc()) {
     $productsInDb[] = $row['Product'];
 }
 $products = $allProducts;
+
+
+if (isset($_POST['costshow'])) {
+    // 1. Calculate total cost per row and sum by date
+    $sql = "
+        SELECT Date, SUM(Kg * Price) AS cost
+        FROM offelsystem
+        GROUP BY Date
+        ORDER BY Date ASC
+    ";
+
+    $result = $conn->query($sql);
+
+    if ($result->num_rows > 0) {
+        while ($row = $result->fetch_assoc()) {
+            $date = $row['Date'];
+            $totalCost = $row['cost'];
+
+            // 2. Insert or update into offelcosttotal
+            // Optional: check if date already exists to avoid duplicates
+            $checkSql = "SELECT ID FROM offelrecieved WHERE date = '$date'";
+            $checkResult = $conn->query($checkSql);
+
+            if ($checkResult->num_rows > 0) {
+                // Update existing record
+                $updateSql = "UPDATE offelrecieved SET cost = '$totalCost' WHERE date = '$date'";
+                $conn->query($updateSql);
+            } else {
+                // Insert new record
+                $insertSql = "INSERT INTO offelrecieved (date, cost) VALUES ('$date', '$totalCost')";
+                $conn->query($insertSql);
+            }
+        }
+        echo "offelrecieved table updated successfully.";
+    } else {
+        echo "No data found in offelsystem.";
+    }
+
+    
+
+    // Redirect to another page
+    header("Location: OffelIncome.php");
+    exit();
+}
+
 
 ?>

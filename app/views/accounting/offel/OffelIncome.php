@@ -21,14 +21,26 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\offel\Offel
                 <thead class="table-dark">
                     <tr>
                         <th>Date</th>
-                        <th>Amount</th>
+                        <th>Buyer Name</th>
+                        <th>Amount Income</th>
+                        <th>Running Balance Income</th>
+                        <th>Amount Recieved</th>
+                        <th>Running Balance Recived</th>
+                        <th>Balance</th>
                     </tr>
                 </thead>
                 <tbody>
                     <?php while ($row = $result->fetch_assoc()) { ?>
                         <tr>
                             <td><?= htmlspecialchars($row['Date']) ?></td>
+                            <td>B</td>
+                            <?php $runningTotalincome += $row['cost']; // running balance Income?>
+                            <td><?= number_format($row['cost'], 2) ?></td>
+                            <td><?= number_format($runningTotalincome, 2) ?></td>
+                            <?php $runningTotalrecived += $row['Amount']; // running balance Recieved?>
                             <td><?= number_format($row['Amount'], 2) ?></td>
+                            <td><?= number_format($runningTotalrecived, 2) ?></td>
+                            <td><?= number_format($runningTotalincome - $runningTotalrecived, 2) ?></td>
                         </tr>
                     <?php } ?>
                 </tbody>
