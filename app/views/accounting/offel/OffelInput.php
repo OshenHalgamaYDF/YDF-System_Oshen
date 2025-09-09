@@ -25,12 +25,11 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\offel\Offel
         <br>
         <div class="mx-2 d-inline">
             <form method="post" action="">
-                <button type="submit" class="btn btn-danger px-4" name="costshow"> Calculate the total income recieved</button>
+                <button type="submit" class="btn btn-danger px-4" name="costshow"> View Balance</button>
             </form>
         </div>
     </div>
 
-    
     <!-- Modal for Add/Edit Offel Record -->
     <div class="modal fade" id="offelModal" tabindex="-1" aria-labelledby="offelModalLabel" aria-hidden="true">
         <div class="modal-dialog">
@@ -121,9 +120,18 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\offel\Offel
                 <div class="modal-body">
                     <form method="POST" class="row g-3" id="offelForm1" novalidate autocomplete="off">
                         <div class="col-md-12">
-                            <label>Input Date: </label>
+                            <label>Input Income Date: </label>
                             <input type="date" name="RdateOffel" id="RdateOffel" class="form-control" required/>
                             <div class="invalid-feedback">Please enter a date.</div>
+                        </div>
+                        <div class="col-md-12">
+                            <label>Buyer Name: </label>
+                            <input type="text" name="RbuyerOffel" id="RbuyerOffel" class="form-control" required/>
+                            <div class="invalid-feedback">Please enter a buyer name.</div>
+                        </div>
+                        <div class="col-md-12">
+                            <label>Input Buyer Date: </label>
+                            <input type="date" name="RdateBuyerOffel" id="RdateBuyerOffel" class="form-control"/>
                         </div>
                         <div class="col-md-12">
                             <label>Input Amount: </label>

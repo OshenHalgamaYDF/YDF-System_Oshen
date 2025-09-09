@@ -53,13 +53,15 @@ if (isset($_POST['SubmitOffel'])) {
 if (isset($_POST['RSubmitOffel'])) {
     // Get values safely
     $date = $_POST['RdateOffel'] ?? '';
+    $buyer = $_POST['RbuyerOffel'] ?? '';
+    $buyerDate = $_POST['RdateBuyerOffel'] ?? '';
     $amount = $_POST['RamountOffel'] ?? '';
 
     // Basic validation
-    if (!empty($date) && !empty($amount)) {
+    if (!empty($date) && !empty($buyer) && !empty($amount) && !empty($buyerDate)) {
         // Prepare insert
-        $stmt = $conn->prepare("INSERT INTO offelrecieved (`Date`, `Amount`) VALUES (?, ?)");
-        $stmt->bind_param("sd", $date, $amount);  // s = string (date), d = double (amount)
+        $stmt = $conn->prepare("INSERT INTO offelrecieved (`Date`, `Buyer`, `Amount`, `BuyerDate`) VALUES (?, ?, ?, ?)");
+        $stmt->bind_param("ssds", $date, $buyer, $amount, $buyerDate);  // s = string (date, buyer), d = double (amount)
 
         if ($stmt->execute()) {
             header("Location: OffelInput.php");
@@ -103,9 +105,9 @@ $products = $allProducts;
 if (isset($_POST['costshow'])) {
     // 1. Calculate total cost per row and sum by date
     $sql = "
-        SELECT Date, SUM(Kg * Price) AS cost
+        SELECT Date, Buyer, SUM(Kg * Price) AS cost
         FROM offelsystem
-        GROUP BY Date
+        GROUP BY Date, Buyer
         ORDER BY Date ASC
     ";
 
@@ -114,20 +116,20 @@ if (isset($_POST['costshow'])) {
     if ($result->num_rows > 0) {
         while ($row = $result->fetch_assoc()) {
             $date = $row['Date'];
+            $buyer = $row['Buyer'];
             $totalCost = $row['cost'];
 
-            // 2. Insert or update into offelcosttotal
-            // Optional: check if date already exists to avoid duplicates
-            $checkSql = "SELECT ID FROM offelrecieved WHERE date = '$date'";
+            // Insert or update into offelcosttotal Also check if date already exists to avoid duplicates
+            $checkSql = "SELECT ID FROM offelrecieved WHERE date = '$date' AND buyer = '$buyer'";
             $checkResult = $conn->query($checkSql);
 
             if ($checkResult->num_rows > 0) {
                 // Update existing record
-                $updateSql = "UPDATE offelrecieved SET cost = '$totalCost' WHERE date = '$date'";
+                $updateSql = "UPDATE offelrecieved SET cost = '$totalCost' WHERE date = '$date' AND buyer = '$buyer'";
                 $conn->query($updateSql);
             } else {
                 // Insert new record
-                $insertSql = "INSERT INTO offelrecieved (date, cost) VALUES ('$date', '$totalCost')";
+                $insertSql = "INSERT INTO offelrecieved (date, buyer, cost) VALUES ('$date', '$buyer', '$totalCost')";
                 $conn->query($insertSql);
             }
         }
@@ -135,8 +137,6 @@ if (isset($_POST['costshow'])) {
     } else {
         echo "No data found in offelsystem.";
     }
-
-    
 
     // Redirect to another page
     header("Location: OffelIncome.php");
