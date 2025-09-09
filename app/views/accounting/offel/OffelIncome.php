@@ -47,14 +47,14 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\offel\Offel
                         $runningTotalrecived += $row['Amount'];
                     ?>
                         <tr>
-                            <td><?= htmlspecialchars($row['Date']) ?></td>
+                            <td><?= htmlspecialchars(date("d/m/Y", strtotime($row['Date']))) ?></td>
                             <td><?= htmlspecialchars($row['Buyer']) ?></td>
                             <td><?= number_format($row['cost'], 2) ?></td>
                             <td><?= number_format($runningTotalincome, 2) ?></td>
                             <td><?= number_format($row['Amount'], 2) ?></td>
                             <td><?= number_format($runningTotalrecived, 2) ?></td>
                             <td><?= number_format($runningTotalincome - $runningTotalrecived, 2) ?></td>
-                            <td><?= htmlspecialchars($row['BuyerDate']) ?></td>
+                            <td><?= htmlspecialchars(date("d/m/Y", strtotime($row['BuyerDate']))) ?></td>
                         </tr>
                     <?php } ?>
                 </tbody>

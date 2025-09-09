@@ -27,8 +27,7 @@ if (isset($_POST['SubmitOffel'])) {
     $KGOffel = $_POST['KGOffel'] ?? '';
     $PriceOffel = $_POST['PriceOffel'] ?? '';
     $RemarkOffel = $_POST['RemarkOffel'] ?? '';
-    
-    
+
     if ($id) {
         // UPDATE query
         $stmt = $conn->prepare("UPDATE offelsystem SET Date=?, Product=?, Type=?, Buyer=?, Kg=?, Price=?, Remark=? WHERE ID=?");
@@ -59,9 +58,25 @@ if (isset($_POST['RSubmitOffel'])) {
 
     // Basic validation
     if (!empty($date) && !empty($buyer) && !empty($amount) && !empty($buyerDate)) {
-        // Prepare insert
-        $stmt = $conn->prepare("INSERT INTO offelrecieved (`Date`, `Buyer`, `Amount`, `BuyerDate`) VALUES (?, ?, ?, ?)");
-        $stmt->bind_param("ssds", $date, $buyer, $amount, $buyerDate);  // s = string (date, buyer), d = double (amount)
+
+        // Check if a record with this Date already exists
+        $checkStmt = $conn->prepare("SELECT ID FROM offelrecieved WHERE Date = ?");
+        $checkStmt->bind_param("s", $date);
+        $checkStmt->execute();
+        $checkResult = $checkStmt->get_result();
+
+        if ($checkResult->num_rows > 0) {
+            // Update existing record
+            $stmt = $conn->prepare("UPDATE offelrecieved 
+                                    SET Buyer = ?, Amount = ?, BuyerDate = ? 
+                                    WHERE Date = ?");
+            $stmt->bind_param("sdss", $buyer, $amount, $buyerDate, $date);
+        } else {
+            // Insert new record
+            $stmt = $conn->prepare("INSERT INTO offelrecieved (`Date`, `Buyer`, `Amount`, `BuyerDate`) 
+                                    VALUES (?, ?, ?, ?)");
+            $stmt->bind_param("ssds", $date, $buyer, $amount, $buyerDate);
+        }
 
         if ($stmt->execute()) {
             header("Location: OffelInput.php");
@@ -69,9 +84,15 @@ if (isset($_POST['RSubmitOffel'])) {
         } else {
             echo "Error: " . $stmt->error;
         }
+
         $stmt->close();
-    } 
+        $checkStmt->close();
+
+    } else {
+        echo "Please fill in all required fields.";
+    }
 }
+
 
 // Handle Delete
 if (isset($_POST['delete_input']) && isset($_POST['id'])) {
@@ -142,6 +163,4 @@ if (isset($_POST['costshow'])) {
     header("Location: OffelIncome.php");
     exit();
 }
-
-
 ?>
