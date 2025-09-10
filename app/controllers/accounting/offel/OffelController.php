@@ -50,27 +50,24 @@ if (isset($_POST['SubmitOffel'])) {
 }
 
 if (isset($_POST['RSubmitOffel'])) {
-    // Get values safely
     $date = $_POST['RdateOffel'] ?? '';
     $buyer = $_POST['RbuyerOffel'] ?? '';
     $buyerDate = $_POST['RdateBuyerOffel'] ?? '';
     $amount = $_POST['RamountOffel'] ?? '';
 
-    // Basic validation
-    if (!empty($date) && !empty($buyer) && !empty($amount) && !empty($buyerDate)) {
-
-        // Check if a record with this Date already exists
-        $checkStmt = $conn->prepare("SELECT ID FROM offelrecieved WHERE Date = ?");
-        $checkStmt->bind_param("s", $date);
+    if (!empty($date) && !empty($buyer) && !empty($amount)) {
+        // ✅ Check for both Date + Buyer
+        $checkStmt = $conn->prepare("SELECT ID FROM offelrecieved WHERE Date = ? AND Buyer = ?");
+        $checkStmt->bind_param("ss", $date, $buyer);
         $checkStmt->execute();
         $checkResult = $checkStmt->get_result();
 
         if ($checkResult->num_rows > 0) {
             // Update existing record
             $stmt = $conn->prepare("UPDATE offelrecieved 
-                                    SET Buyer = ?, Amount = ?, BuyerDate = ? 
-                                    WHERE Date = ?");
-            $stmt->bind_param("sdss", $buyer, $amount, $buyerDate, $date);
+                                    SET Amount = ?, BuyerDate = ? 
+                                    WHERE Date = ? AND Buyer = ?");
+            $stmt->bind_param("dsss", $amount, $buyerDate, $date, $buyer);
         } else {
             // Insert new record
             $stmt = $conn->prepare("INSERT INTO offelrecieved (`Date`, `Buyer`, `Amount`, `BuyerDate`) 
@@ -87,11 +84,11 @@ if (isset($_POST['RSubmitOffel'])) {
 
         $stmt->close();
         $checkStmt->close();
-
     } else {
         echo "Please fill in all required fields.";
     }
 }
+
 
 
 // Handle Delete
@@ -126,10 +123,10 @@ $products = $allProducts;
 if (isset($_POST['costshow'])) {
     // 1. Calculate total cost per row and sum by date
     $sql = "
-        SELECT Date, Buyer, SUM(Kg * Price) AS cost
-        FROM offelsystem
-        GROUP BY Date, Buyer
-        ORDER BY Date ASC
+            SELECT Date, Buyer, SUM(Kg * Price) AS cost
+            FROM offelsystem
+            GROUP BY Date, Buyer
+            ORDER BY Date ASC, Buyer ASC
     ";
 
     $result = $conn->query($sql);
