@@ -56,7 +56,7 @@ if (isset($_POST['RSubmitOffel'])) {
     $amount = $_POST['RamountOffel'] ?? '';
 
     if (!empty($date) && !empty($buyer) && !empty($amount)) {
-        // ✅ Check for both Date + Buyer
+        // Check for both Date + Buyer
         $checkStmt = $conn->prepare("SELECT ID FROM offelrecieved WHERE Date = ? AND Buyer = ?");
         $checkStmt->bind_param("ss", $date, $buyer);
         $checkStmt->execute();
