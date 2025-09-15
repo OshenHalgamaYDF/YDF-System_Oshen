@@ -1,86 +1,225 @@
-<?php 
+<?php
 include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\buyingpriceanalysis\BuyingPriceAnalysisController.php');
 ?>
 <!DOCTYPE html>
 <html lang="en">
-  <head>
+<head>
     <meta charset="UTF-8" />
     <title>Buying Price Analysis</title>
-  </head>
-  <body>
-    <h1>Buying Price Analysis</h1>
-    <form method="post">
-      <!-- s -->
-      <input type="hidden" name="product_code" required />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/jquery.dataTables.min.css">
+</head>
+<body>
+<div class="container mt-4">
+    <h1 class="text-center mb-4 text-primary fw-bold">Buying Price Analysis</h1>
 
-      <label>Date:</label>
-      <input type="date" name="date" required />
-      <br /><br />
+    <div class="mb-2">
+        <button type="button" class="btn btn-primary px-4" data-bs-toggle="modal" data-bs-target="#offelModal" id="addOffelBtn">
+            + Buying Price
+        </button>
+    </div>
 
-      <label>Product Name:</label>
-      <select name="product_name" required onchange="fillProductDetails()">
-        <option value="">Select Product</option>
-        <?php foreach ($products as $product): ?>
-        <option
-          value="<?php echo htmlspecialchars($product['product_name']); ?>"
-          data-product-code="<?php echo htmlspecialchars($product['product_code']); ?>"
-          data-scientific-name="<?php echo htmlspecialchars($product['scientific_name']); ?>"
-        >
-          <?php echo htmlspecialchars($product['product_name']); ?>
-        </option>
-        <?php endforeach; ?>
-      </select>
-      <br /><br />
+    <div class="modal fade" id="offelModal" tabindex="-1" aria-labelledby="offelModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <!-- Modal Header -->
+                <div class="modal-header">
+                    <h5 class="modal-title" id="offelModalLabel">Form to Add Buying Price Record</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form method="post" class="row g-3" id="buyingPriceForm" novalidate autocomplete="off">
+                        <div class="col-md-12">
+                            <label>Date:</label>
+                            <input type="date" name="date" id="date" class="form-control" required>
+                            <div class="invalid-feedback">Please enter a date.</div>
+                        </div>
 
-      <!-- <label>Scientific Name:</label> -->
-      <input type="hidden" name="scientific_name" />
+                        <div class="col-md-12">
+                            <label>Product Name:</label>
+                            <select name="product_name" id="product_name" class="form-select" required onchange="fillProductDetails()">
+                                <option value="">Select Product</option>
+                                <?php foreach ($products as $product): ?>
+                                    <option
+                                        value="<?php echo htmlspecialchars($product['Product_Name']); ?>"
+                                        data-product-code="<?php echo htmlspecialchars($product['Product_Code']); ?>"
+                                        data-scientific-name="<?php echo htmlspecialchars($product['Scientific_Name']); ?>"
+                                        data-size-range="<?php echo htmlspecialchars($product['Size_Range']); ?>"
+                                        data-specification="<?php echo htmlspecialchars($product['Specification']); ?>"
+                                        data-target-price="<?php echo htmlspecialchars($product['Target_buying_price']); ?>"
+                                    >
+                                        <?php echo htmlspecialchars($product['Product_Name']); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <div class="invalid-feedback">Please select a product.</div>
+                        </div>
 
-      <label>Size Range:</label>
-      <input type="text" name="size_range" required />
-      <br /><br />
+                        <input type="hidden" name="scientific_name" id="scientific_name" />
 
-      <label>Specification:</label>
-      <input type="text" name="specification" required />
-      <br /><br />
+                        <div class="col-md-4">
+                            <label>Product Code:</label>
+                            <input type="text" name="product_code" id="product_code" class="form-control" required>
+                            <div class="invalid-feedback">Product code is required.</div>
+                        </div>
 
-      <label>Target Price:</label>
-      <input type="number" step="0.01" name="target_price" required />
-      <br /><br />
+                        <div class="col-md-4">
+                            <label>Size Range:</label>
+                            <input type="text" name="size_range" id="size_range" class="form-control" required>
+                            <div class="invalid-feedback">Please enter the size range.</div>
+                        </div>
 
-      <label>Buyer Name:</label>
-      <input type="text" name="buyer_name" required />
-      <br /><br />
+                        <div class="col-md-4">
+                            <label>Specification:</label>
+                            <input type="text" name="specification" id="specification" class="form-control" required>
+                            <div class="invalid-feedback">Please enter the specification.</div>
+                        </div>
 
-      <label>Sold Price:</label>
-      <input type="number" step="0.01" name="sold_price" required />
-      <br /><br />
+                        <div class="col-md-4">
+                            <label>Target Price:</label>
+                            <input type="number" step="0.01" name="target_price" id="target_price" class="form-control" required>
+                            <div class="invalid-feedback">Please enter the target price.</div>
+                        </div>
 
-      <button
-        type="submit"
-        name="SubmitOffel"
-        class="btn btn-primary px-4"
-        id="modalSubmitBtn"
-      >
-        Add
-      </button>
-    </form>
-    <script>
-      function fillProductDetails() {
-        const productSelect = document.querySelector(
-          'select[name="product_name"]'
-        );
-        const selectedOption =
-          productSelect.options[productSelect.selectedIndex];
+                        <div class="col-md-4">
+                            <label>Buyer Name:</label>
+                            <select name="buyer_name" id="buyer_name" class="form-select" required>
+                                <option value="">Select Buyer</option>
+                                <option value="Madushan">Madushan</option>
+                                <option value="Charith">Charith</option>
+                                <option value="Miranda">Miranda</option>
+                                <option value="Mahesh">Mahesh</option>
+                                <option value="Safras">Safras</option>
+                                <option value="Rijas">Rijas</option>
+                                <option value="Layoma">Layoma</option>
+                                <option value="Sameera">Sameera</option>
+                                <option value="Sujan">Sujan</option>
+                            </select>
+                            <div class="invalid-feedback">Please select a buyer.</div>
+                        </div>
 
-        if (selectedOption.dataset.productCode) {
-          document.querySelector('input[name="product_code"]').value =
-            selectedOption.dataset.productCode;
+                        <div class="col-md-4">
+                            <label>Buying Price:</label>
+                            <input type="number" step="0.01" name="sold_price" id="sold_price" class="form-control" required>
+                            <div class="invalid-feedback">Please enter the buying price.</div>
+                        </div>
+
+                        <!-- Modal Footer -->
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                            <button type="submit" name="SubmitOffel" class="btn btn-primary px-4">Add</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="container mt-4">
+        <form method="get" class="row mb-3">
+            <div class="col-md-4">
+                <input type="date" name="date" class="form-control" value="<?php echo htmlspecialchars($selectedDate); ?>">
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary">Filter</button>
+            </div>
+        </form>
+
+        <!-- Bootstrap Tabs -->
+        <ul class="nav nav-tabs" id="buyerTabs" role="tablist">
+            <?php foreach ($buyers as $index => $buyer): ?>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link <?php echo $index===0 ? 'active' : ''; ?>" 
+                            id="tab-<?php echo $buyer; ?>" 
+                            data-bs-toggle="tab" 
+                            data-bs-target="#content-<?php echo $buyer; ?>" 
+                            type="button" 
+                            role="tab">
+                        <?php echo htmlspecialchars($buyer); ?>
+                    </button>
+                </li>
+            <?php endforeach; ?>
+        </ul>
+
+        <div class="tab-content mt-3">
+            <?php foreach ($buyers as $index => $buyer): ?>
+                <div class="tab-pane fade <?php echo $index===0 ? 'show active' : ''; ?>" 
+                    id="content-<?php echo $buyer; ?>" 
+                    role="tabpanel">
+
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-striped">
+                            <thead class="table-primary">
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Product Code</th>
+                                    <th>Product Name</th>
+                                    <th>Scientific Name</th>
+                                    <th>Size Range</th>
+                                    <th>Specification</th>
+                                    <th>Target Price</th>
+                                    <th>Buying Price</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php
+                                $sql = "SELECT * FROM buyingpriceanlaysistable 
+                                        WHERE date = '$selectedDate' AND buyer_name = '$buyer'
+                                        ORDER BY product_name ASC";
+                                $result = $conn->query($sql);
+                                if ($result && $result->num_rows > 0) {
+                                    while ($row = $result->fetch_assoc()) {
+                                        echo "<tr>
+                                            <td>".htmlspecialchars($row['date'])."</td>
+                                            <td>".htmlspecialchars($row['product_code'])."</td>
+                                            <td>".htmlspecialchars($row['product_name'])."</td>
+                                            <td>".htmlspecialchars($row['scientific_name'])."</td>
+                                            <td>".htmlspecialchars($row['size_range'])."</td>
+                                            <td>".htmlspecialchars($row['specification'])."</td>
+                                            <td>".number_format($row['target_price'],2)."</td>
+                                            <td>".number_format($row['sold_price'],2)."</td>
+                                        </tr>";
+                                    }
+                                } else {
+                                    echo "<tr><td colspan='8' class='text-center'>No records for $buyer</td></tr>";
+                                }
+                                ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+</div>
+
+<script>
+function fillProductDetails() {
+    const productSelect = document.getElementById('product_name');
+    const selectedOption = productSelect.options[productSelect.selectedIndex];
+
+    document.getElementById('product_code').value = selectedOption.dataset.productCode || '';
+    document.getElementById('scientific_name').value = selectedOption.dataset.scientificName || '';
+    document.getElementById('size_range').value = selectedOption.dataset.sizeRange || '';
+    document.getElementById('specification').value = selectedOption.dataset.specification || '';
+    document.getElementById('target_price').value = selectedOption.dataset.targetPrice || '';
+}
+
+// Bootstrap 5 validation
+(function () {
+    'use strict';
+    const form = document.getElementById('buyingPriceForm');
+    form.addEventListener('submit', function(event) {
+        if (!form.checkValidity()) {
+            event.preventDefault();
+            event.stopPropagation();
         }
-        if (selectedOption.dataset.scientificName) {
-          document.querySelector('input[name="scientific_name"]').value =
-            selectedOption.dataset.scientificName;
-        }
-      }
-    </script>
-  </body>
+        form.classList.add('was-validated');
+    }, false);
+})();
+</script>
+</body>
 </html>
