@@ -7,11 +7,18 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\buyingprice
     <meta charset="UTF-8" />
     <title>Buying Price Analysis</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- DataTables CSS -->
+    <link href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+
+    <!-- jQuery -->
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+
+    <!-- DataTables JS -->
     <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
-    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/jquery.dataTables.min.css">
+    <script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
 </head>
 <body>
 <div class="container mt-4">
@@ -20,6 +27,9 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\buyingprice
     <div class="mb-2">
         <button type="button" class="btn btn-primary px-4" data-bs-toggle="modal" data-bs-target="#offelModal" id="addOffelBtn">
             + Buying Price
+        </button>
+        <button class="btn btn-danger px-4" onclick="window.location.href='BuyingPriceSummary.php'">
+            View Summary   
         </button>
     </div>
 
@@ -128,31 +138,31 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\buyingprice
             </div>
         </form>
 
-        <!-- Bootstrap Tabs -->
-        <ul class="nav nav-tabs" id="buyerTabs" role="tablist">
-            <?php foreach ($buyers as $index => $buyer): ?>
+       <!-- Bootstrap Tabs -->
+        <ul class="nav nav-tabs" id="productTabs" role="tablist">
+            <?php foreach ($productsForDate as $index => $product): ?>
                 <li class="nav-item" role="presentation">
                     <button class="nav-link <?php echo $index===0 ? 'active' : ''; ?>" 
-                            id="tab-<?php echo $buyer; ?>" 
+                            id="tab-<?php echo md5($product); ?>" 
                             data-bs-toggle="tab" 
-                            data-bs-target="#content-<?php echo $buyer; ?>" 
+                            data-bs-target="#content-<?php echo md5($product); ?>" 
                             type="button" 
                             role="tab">
-                        <?php echo htmlspecialchars($buyer); ?>
+                        <?php echo htmlspecialchars($product); ?>
                     </button>
                 </li>
             <?php endforeach; ?>
         </ul>
 
         <div class="tab-content mt-3">
-            <?php foreach ($buyers as $index => $buyer): ?>
+            <?php foreach ($productsForDate as $index => $product): ?>
                 <div class="tab-pane fade <?php echo $index===0 ? 'show active' : ''; ?>" 
-                    id="content-<?php echo $buyer; ?>" 
+                    id="content-<?php echo md5($product); ?>" 
                     role="tabpanel">
 
                     <div class="table-responsive">
-                        <table class="table table-bordered table-striped">
-                            <thead class="table-primary">
+                        <table class="table table-striped table-hover text-center align-middle table-bordered" id="table-<?php echo md5($product); ?>">
+                            <thead class="table-primary table-dark">
                                 <tr>
                                     <th>Date</th>
                                     <th>Product Code</th>
@@ -161,17 +171,21 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\buyingprice
                                     <th>Size Range</th>
                                     <th>Specification</th>
                                     <th>Target Price</th>
+                                    <th>Buyer Name</th>
                                     <th>Buying Price</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <?php
-                                $sql = "SELECT * FROM buyingpriceanlaysistable 
-                                        WHERE date = '$selectedDate' AND buyer_name = '$buyer'
-                                        ORDER BY product_name ASC";
+                                $sql = "SELECT * FROM buyingpriceanlaysistable WHERE date = '$selectedDate' AND product_name = '$product' ORDER BY buyer_name ASC";
                                 $result = $conn->query($sql);
+                                $totalPrice = 0;
+                                $recordCount = 0;
+                                
                                 if ($result && $result->num_rows > 0) {
                                     while ($row = $result->fetch_assoc()) {
+                                        $totalPrice += $row['sold_price'];
+                                        $recordCount++;
                                         echo "<tr>
                                             <td>".htmlspecialchars($row['date'])."</td>
                                             <td>".htmlspecialchars($row['product_code'])."</td>
@@ -180,14 +194,30 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\buyingprice
                                             <td>".htmlspecialchars($row['size_range'])."</td>
                                             <td>".htmlspecialchars($row['specification'])."</td>
                                             <td>".number_format($row['target_price'],2)."</td>
+                                            <td>".htmlspecialchars($row['buyer_name'])."</td>
                                             <td>".number_format($row['sold_price'],2)."</td>
                                         </tr>";
                                     }
                                 } else {
-                                    echo "<tr><td colspan='8' class='text-center'>No records for $buyer</td></tr>";
+                                    echo "<tr><td colspan='9' class='text-center'>No records for $product</td></tr>";
                                 }
                                 ?>
                             </tbody>
+                            <tfoot class="table-secondary">
+                                <tr>
+                                    <th colspan="8" class="text-end">Average Buying Price:</th>
+                                    <th>
+                                        <?php 
+                                        if ($recordCount > 0) {
+                                            $average = $totalPrice / $recordCount;
+                                            echo number_format($average, 2);
+                                        } else {
+                                            echo "0.00";
+                                        }
+                                        ?>
+                                    </th>
+                                </tr>
+                            </tfoot>
                         </table>
                     </div>
                 </div>
@@ -220,6 +250,31 @@ function fillProductDetails() {
         form.classList.add('was-validated');
     }, false);
 })();
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize DataTables for the first active tab
+    $('.tab-pane.active table').DataTable({
+        "pageLength": 10,     // show 10 rows per page
+        "ordering": true,     // enable column sorting
+        "searching": true,    // enable search
+        "lengthChange": true  // allow user to change page size
+    });
+
+    // Initialize DataTables for other tabs when they are shown
+    $('#productTabs button').on('shown.bs.tab', function (e) {
+        var target = $(e.target).data('bs-target');
+        var tableId = $(target + ' table').attr('id');
+        
+        if (!$.fn.DataTable.isDataTable('#' + tableId)) {
+            $('#' + tableId).DataTable({
+                "pageLength": 10,     // show 10 rows per page
+                "ordering": true,     // enable column sorting
+                "searching": true,    // enable search
+                "lengthChange": true  // allow user to change page size
+            });
+        }
+    });
+});
 </script>
 </body>
 </html>

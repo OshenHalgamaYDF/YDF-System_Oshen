@@ -51,7 +51,7 @@ if (isset($_POST['SubmitOffel'])) {
 
 // Fetch products for dropdown - UPDATED with new column names
 $products = [];
-$result = $conn->query("SELECT Product_Code, Product_Name, Scientific_Name, Size_Range, Specification, Target_buying_price FROM bpa_template WHERE Product_Name IS NOT NULL ORDER BY Product_Name");
+$result = $conn->query("SELECT Product_Code, Product_Name, Scientific_Name, Size_Range, Specification, Target_buying_price FROM bpa_template_final WHERE Product_Name IS NOT NULL ORDER BY Product_Name");
 
 if ($result && $result->num_rows > 0) {
     while ($row = $result->fetch_assoc()) {
@@ -68,10 +68,14 @@ $latestDate    = $latestDateRow['latest_date'];
 
 $selectedDate = isset($_GET['date']) ? $_GET['date'] : $latestDate;
 
-// --- Get distinct buyers for this date
-$buyers = [];
-$resBuyers = $conn->query("SELECT DISTINCT buyer_name FROM buyingpriceanlaysistable WHERE date = '$selectedDate'");
-while ($row = $resBuyers->fetch_assoc()) {
-    $buyers[] = $row['buyer_name'];
+// --- Get distinct products for this date
+$productsForDate = [];
+$resProducts = $conn->query("SELECT DISTINCT product_name FROM buyingpriceanlaysistable WHERE date = '$selectedDate' ORDER BY product_name ASC");
+while ($row = $resProducts->fetch_assoc()) {
+    $productsForDate[] = $row['product_name'];
 }
+$count =0;
+$avgprices = 0;
+
+
 ?>
