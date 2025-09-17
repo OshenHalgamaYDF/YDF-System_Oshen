@@ -129,15 +129,7 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\buyingprice
             </div>
         </div>
     </div>
-    <div class="container mt-4">
-        <form method="get" class="row mb-3">
-            <div class="col-md-4">
-                <input type="date" name="date" class="form-control" value="<?php echo htmlspecialchars($selectedDate); ?>">
-            </div>
-            <div class="col-md-2">
-                <button type="submit" class="btn btn-primary">Filter</button>
-            </div>
-        </form>
+    <div class="container mt-2">
 
        <!-- Bootstrap Tabs -->
         <ul class="nav nav-tabs" id="productTabs" role="tablist">
@@ -155,7 +147,7 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\buyingprice
             <?php endforeach; ?>
         </ul>
 
-        <div class="tab-content mt-3">
+        <div class="tab-content mt-2">
             <?php foreach ($productsForDate as $index => $product): ?>
                 <div class="tab-pane fade <?php echo $index===0 ? 'show active' : ''; ?>" 
                     id="content-<?php echo md5($product); ?>" 
@@ -164,16 +156,27 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\buyingprice
                     <div class="table-responsive">
                         <table class="table table-striped table-hover text-center align-middle table-bordered" id="table-<?php echo md5($product); ?>">
                             <thead class="table-primary table-dark">
+                                <tr class="text-center">
+                                    <th rowspan="2">Product Code</th>
+                                    <th rowspan="2">Product Name</th>
+                                    <th rowspan="2">Size Range</th>
+                                    <th rowspan="2">Target Price</th>
+                                    <th colspan="13">Buyer Price</th>
+                                    <th rowspan="2">Average Price</th>
+                                </tr>
                                 <tr>
-                                    <th>Date</th>
-                                    <th>Product Code</th>
-                                    <th>Product Name</th>
-                                    <th>Scientific Name</th>
-                                    <th>Size Range</th>
-                                    <th>Specification</th>
-                                    <th>Target Price</th>
-                                    <th>Buyer Name</th>
-                                    <th>Buying Price</th>
+                                    <th>Madushan</th>
+                                    <th>Charith</th>
+                                    <th>Miranda</th>
+                                    <th>Mahesh</th>
+                                    <th>Rilwan</th>
+                                    <th>MC Anthony</th>
+                                    <th>Safras</th>
+                                    <th>Sujan</th>
+                                    <th>Sameera</th>
+                                    <th>Anthony</th>
+                                    <th>Rijas</th>
+                                    <th>Layoma</th>
                                 </tr>
                             </thead>
                             <tbody>
