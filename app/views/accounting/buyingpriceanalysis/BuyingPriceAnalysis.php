@@ -56,14 +56,14 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\buyingprice
                                 <option value="">Select Product</option>
                                 <?php foreach ($products as $product): ?>
                                     <option
-                                        value="<?php echo htmlspecialchars($product['Product_Name']); ?>"
-                                        data-product-code="<?php echo htmlspecialchars($product['Product_Code']); ?>"
-                                        data-scientific-name="<?php echo htmlspecialchars($product['Scientific_Name']); ?>"
-                                        data-size-range="<?php echo htmlspecialchars($product['Size_Range']); ?>"
-                                        data-specification="<?php echo htmlspecialchars($product['Specification']); ?>"
-                                        data-target-price="<?php echo htmlspecialchars($product['Target_buying_price']); ?>"
+                                        value="<?php echo htmlspecialchars($product['product_name']); ?>"
+                                        data-product-code="<?php echo htmlspecialchars($product['product_code']); ?>"
+                                        data-scientific-name="<?php echo htmlspecialchars($product['scientific_name']); ?>"
+                                        data-size-range="<?php echo htmlspecialchars($product['size_range']); ?>"
+                                        data-specification="<?php echo htmlspecialchars($product['specification']); ?>"
+                                        data-target-price="<?php echo htmlspecialchars($product['target_buying_price']); ?>"
                                     >
-                                        <?php echo htmlspecialchars($product['Product_Name']); ?>
+                                        <?php echo htmlspecialchars($product['product_name']); ?>
                                     </option>
                                 <?php endforeach; ?>
                             </select>
@@ -118,6 +118,10 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\buyingprice
                             <input type="number" step="0.01" name="sold_price" id="sold_price" class="form-control" required>
                             <div class="invalid-feedback">Please enter the buying price.</div>
                         </div>
+                        <div class="col-md-12">
+                            <label>Remark (Optional):</label>
+                            <input type="text" name="remark" id="remark" class="form-control">
+                        </div>
 
                         <!-- Modal Footer -->
                         <div class="modal-footer">
@@ -129,103 +133,202 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\buyingprice
             </div>
         </div>
     </div>
-    <div class="container mt-2">
 
+    <div class="modal fade" id="deleteModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Confirm Delete</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Are you sure you want to delete this record? This action cannot be undone.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-danger" id="confirmDelete">Delete</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="container-fluid">
        <!-- Bootstrap Tabs -->
-        <ul class="nav nav-tabs" id="productTabs" role="tablist">
-            <?php foreach ($productsForDate as $index => $product): ?>
+        <ul class="nav nav-underline" id="productTabs" role="tablist">
+            <?php foreach ($dateselected as $index => $dateResult): ?>
                 <li class="nav-item" role="presentation">
                     <button class="nav-link <?php echo $index===0 ? 'active' : ''; ?>" 
-                            id="tab-<?php echo md5($product); ?>" 
+                            id="tab-<?php echo md5($dateResult); ?>" 
                             data-bs-toggle="tab" 
-                            data-bs-target="#content-<?php echo md5($product); ?>" 
+                            data-bs-target="#content-<?php echo md5($dateResult); ?>" 
                             type="button" 
                             role="tab">
-                        <?php echo htmlspecialchars($product); ?>
-                    </button>
+                        <?php echo htmlspecialchars($dateResult); ?>
+                    </button>   
                 </li>
             <?php endforeach; ?>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link text-danger" 
+                            id="tab-average" 
+                            data-bs-toggle="tab" 
+                            data-bs-target="#content-average"
+                            type="button" 
+                            role="tab">
+                        Average
+                    </button>
+                </li>
         </ul>
 
         <div class="tab-content mt-2">
-            <?php foreach ($productsForDate as $index => $product): ?>
+            <?php foreach ($dateselected as $index => $dateResult): ?>
                 <div class="tab-pane fade <?php echo $index===0 ? 'show active' : ''; ?>" 
-                    id="content-<?php echo md5($product); ?>" 
+                    id="content-<?php echo md5($dateResult); ?>" 
                     role="tabpanel">
 
                     <div class="table-responsive">
-                        <table class="table table-striped table-hover text-center align-middle table-bordered" id="table-<?php echo md5($product); ?>">
+                        <table class="table table-striped table-hover text-center align-middle table-bordered" 
+                            id="table-<?php echo md5($dateResult); ?>">
                             <thead class="table-primary table-dark">
-                                <tr class="text-center">
-                                    <th rowspan="2">Product Code</th>
-                                    <th rowspan="2">Product Name</th>
-                                    <th rowspan="2">Size Range</th>
-                                    <th rowspan="2">Target Price</th>
-                                    <th colspan="13">Buyer Price</th>
-                                    <th rowspan="2">Average Price</th>
+                                <tr>
+                                    <th rowspan="2" class="text-center align-middle">Product Code</th>
+                                    <th rowspan="2" class="text-center align-middle">Product Name</th>
+                                    <th rowspan="2" class="text-center align-middle">Scientific Name</th>
+                                    <th rowspan="2" class="text-center align-middle">Specification</th>
+                                    <th rowspan="2" class="text-center align-middle">Size Range</th>
+                                    <th rowspan="2" class="text-center align-middle">Target Price</th>
+                                    <th colspan="<?php 
+                                        $buyers = [];
+                                        $sql = "SELECT DISTINCT buyer_name FROM buyingpriceanlaysistable WHERE date = '$dateResult'";
+                                        $res = $conn->query($sql);
+                                        if ($res && $res->num_rows > 0) {
+                                            while ($row = $res->fetch_assoc()) {
+                                                $buyers[] = $row['buyer_name'];
+                                            }
+                                        }
+                                        echo count($buyers);
+                                    ?>" class="text-center align-middle">Buyer Price</th>
+                                    <th rowspan="2" class="text-center align-middle">Average Price</th>
+                                    <th rowspan="2" class="text-center align-middle">Remark</th>
+                                    <th rowspan="2" class="text-center align-middle">Action</th>
                                 </tr>
                                 <tr>
-                                    <th>Madushan</th>
-                                    <th>Charith</th>
-                                    <th>Miranda</th>
-                                    <th>Mahesh</th>
-                                    <th>Rilwan</th>
-                                    <th>MC Anthony</th>
-                                    <th>Safras</th>
-                                    <th>Sujan</th>
-                                    <th>Sameera</th>
-                                    <th>Anthony</th>
-                                    <th>Rijas</th>
-                                    <th>Layoma</th>
+                                    <?php foreach ($buyers as $buyer): ?>
+                                        <th class="text-center align-middle"><?= htmlspecialchars($buyer) ?></th>
+                                    <?php endforeach; ?>
                                 </tr>
                             </thead>
                             <tbody>
                                 <?php
-                                $sql = "SELECT * FROM buyingpriceanlaysistable WHERE date = '$selectedDate' AND product_name = '$product' ORDER BY buyer_name ASC";
+                                // Get distinct products for that date
+                                $sql = "SELECT product_code, product_name, scientific_name, specification, size_range, target_price, 
+                                        GROUP_CONCAT(DISTINCT CONCAT(buyer_name, ': ', remark) SEPARATOR ', ') AS remarks
+                                        FROM buyingpriceanlaysistable
+                                        WHERE date = '$dateResult'
+                                        GROUP BY product_code, product_name, scientific_name, specification, size_range, target_price";
+
                                 $result = $conn->query($sql);
-                                $totalPrice = 0;
-                                $recordCount = 0;
-                                
+
                                 if ($result && $result->num_rows > 0) {
-                                    while ($row = $result->fetch_assoc()) {
-                                        $totalPrice += $row['sold_price'];
-                                        $recordCount++;
-                                        echo "<tr>
-                                            <td>".htmlspecialchars($row['date'])."</td>
-                                            <td>".htmlspecialchars($row['product_code'])."</td>
-                                            <td>".htmlspecialchars($row['product_name'])."</td>
-                                            <td>".htmlspecialchars($row['scientific_name'])."</td>
-                                            <td>".htmlspecialchars($row['size_range'])."</td>
-                                            <td>".htmlspecialchars($row['specification'])."</td>
-                                            <td>".number_format($row['target_price'],2)."</td>
-                                            <td>".htmlspecialchars($row['buyer_name'])."</td>
-                                            <td>".number_format($row['sold_price'],2)."</td>
-                                        </tr>";
-                                    }
-                                } else {
-                                    echo "<tr><td colspan='9' class='text-center'>No records for $product</td></tr>";
-                                }
-                                ?>
-                            </tbody>
-                            <tfoot class="table-secondary">
-                                <tr>
-                                    <th colspan="8" class="text-end">Average Buying Price:</th>
-                                    <th>
-                                        <?php 
-                                        if ($recordCount > 0) {
-                                            $average = $totalPrice / $recordCount;
-                                            echo number_format($average, 2);
-                                        } else {
-                                            echo "0.00";
+                                    while ($product = $result->fetch_assoc()) {?>
+                                        <tr class='text-center'>
+                                        <td><?= htmlspecialchars($product['product_code']) ?></td>
+                                        <td><?= htmlspecialchars($product['product_name']) ?></td>
+                                        <td><?= htmlspecialchars($product['scientific_name']) ?></td>
+                                        <td><?= htmlspecialchars($product['specification']) ?></td>
+                                        <td><?= htmlspecialchars($product['size_range']) ?></td>
+                                        <td><?= number_format($product['target_price'],2) ?></td>
+
+                                        <?php
+                                        // Buyer prices
+                                        $totalPrice = 0;
+                                        $buyerCount = 0;
+                                        foreach ($buyers as $buyer) {
+                                            $sql2 = "SELECT sold_price FROM buyingpriceanlaysistable 
+                                                    WHERE date = '$dateResult' 
+                                                    AND product_code = '".$product['product_code']."' 
+                                                    AND buyer_name = '".$conn->real_escape_string($buyer)."' 
+                                                    LIMIT 1";
+                                            $res2 = $conn->query($sql2);
+                                            if ($res2 && $row2 = $res2->fetch_assoc()) {?>
+                                                <td><?= number_format($row2['sold_price'],2) ?></td>
+                                                <?php
+                                                $totalPrice += $row2['sold_price'];
+                                                $buyerCount++;
+                                            } else {?>
+                                                <td>-</td> // no price for this buyer
+                                            <?php
+                                            }
                                         }
-                                        ?>
-                                    </th>
-                                </tr>
-                            </tfoot>
+
+                                        // Average price
+                                        if ($buyerCount > 0) {
+                                            $average = $totalPrice / $buyerCount;?>
+                                            <td><?= number_format($average,2) ?></td>
+                                        <?php } else {?>
+                                            <td>0.00</td>
+                                        <?php } ?>
+
+                                        <td><?= htmlspecialchars($product['remarks']) ?></td>
+                                        <td>
+                                            <button class='btn btn-sm btn-warning'>
+                                                Edit
+                                            </button>
+                                            &nbsp;
+                                            <button class='btn btn-sm btn-danger'>
+                                                Delete
+                                            </button>
+                                        </td>
+                                        </tr>
+                                    <?php }
+                                } else {?>
+                                    <tr><td colspan='".(7 + count($buyers))."' class='text-center'>No records for $dateResult</td></tr>";
+                                <?php }?>
+                            </tbody>
                         </table>
                     </div>
                 </div>
             <?php endforeach; ?>
+        </div>
+        <div class="tab-average mt-2">
+            <div class="tab-pane fade" 
+                id="content-average" 
+                role="tabpanel">
+            <div class="table-responsive">
+                <h4><b>Average Calculation</b></h4>
+                <table class="table table-striped table-hover text-center align-middle table-bordered" id="averageTable">
+                    <thead class="table-primary table-dark">
+                        <tr>
+                            <th>Product Code</th>
+                            <th>Product Name</th>
+                            <th>Size Range</th>
+                            <th>Target Price</th>
+                            <th>Average Price</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php
+                        $sql = "SELECT product_code, product_name, size_range, target_price, AVG(sold_price) AS average_price 
+                                FROM buyingpriceanlaysistable 
+                                GROUP BY product_code, product_name, size_range, target_price";
+                        $result = $conn->query($sql);
+
+                        if ($result && $result->num_rows > 0) {
+                            while ($row = $result->fetch_assoc()) {
+                                echo "<tr class='text-center'>";
+                                echo "<td>".htmlspecialchars($row['product_code'])."</td>";
+                                echo "<td>".htmlspecialchars($row['product_name'])."</td>";
+                                echo "<td>".htmlspecialchars($row['size_range'])."</td>";
+                                echo "<td>".number_format($row['target_price'],2)."</td>";
+                                echo "<td>".number_format($row['average_price'],2)."</td>";
+                                echo "</tr>";
+                            }
+                        } else {
+                            echo "<tr><td colspan='5' class='text-center'>No records found</td></tr>";
+                        }
+                        ?>
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 </div>
