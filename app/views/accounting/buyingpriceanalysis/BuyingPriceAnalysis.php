@@ -20,6 +20,9 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\buyingprice
     <!-- DataTables JS -->
     <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
     <script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
+
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
 <div class="container mt-4">
@@ -34,6 +37,7 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\buyingprice
         </button>
     </div>
 
+    <!-- Add New Record Modal -->
     <div class="modal fade" id="offelModal" tabindex="-1" aria-labelledby="offelModalLabel" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">
@@ -134,6 +138,7 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\buyingprice
         </div>
     </div>
 
+    <!-- Delete Confirmation Modal -->
     <div class="modal fade" id="deleteModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">
@@ -162,7 +167,8 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\buyingprice
                             data-bs-toggle="tab" 
                             data-bs-target="#content-<?php echo md5($dateResult); ?>" 
                             type="button" 
-                            role="tab">
+                            role="tab"
+                            data-date="<?php echo htmlspecialchars($dateResult); ?>">
                         <?php echo htmlspecialchars($dateResult); ?>
                     </button>   
                 </li>
@@ -183,7 +189,8 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\buyingprice
             <?php foreach ($dateselected as $index => $dateResult): ?>
                 <div class="tab-pane fade <?php echo $index===0 ? 'show active' : ''; ?>" 
                     id="content-<?php echo md5($dateResult); ?>" 
-                    role="tabpanel">
+                    role="tabpanel"
+                    data-date="<?php echo htmlspecialchars($dateResult); ?>">
 
                     <div class="table-responsive">
                         <table class="table table-striped table-hover text-center align-middle table-bordered" 
@@ -208,7 +215,6 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\buyingprice
                                         echo count($buyers);
                                     ?>" class="text-center align-middle">Buyer Price</th>
                                     <th rowspan="2" class="text-center align-middle">Average Price</th>
-                                    <th rowspan="2" class="text-center align-middle">Remark</th>
                                     <th rowspan="2" class="text-center align-middle">Action</th>
                                 </tr>
                                 <tr>
@@ -242,20 +248,35 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\buyingprice
                                         // Buyer prices
                                         $totalPrice = 0;
                                         $buyerCount = 0;
+                                        $buyerPrices = [];
                                         foreach ($buyers as $buyer) {
-                                            $sql2 = "SELECT sold_price FROM buyingpriceanlaysistable 
+                                            $sql2 = "SELECT id, sold_price FROM buyingpriceanlaysistable 
                                                     WHERE date = '$dateResult' 
                                                     AND product_code = '".$product['product_code']."' 
                                                     AND buyer_name = '".$conn->real_escape_string($buyer)."' 
                                                     LIMIT 1";
                                             $res2 = $conn->query($sql2);
                                             if ($res2 && $row2 = $res2->fetch_assoc()) {?>
-                                                <td><?= number_format($row2['sold_price'],2) ?></td>
+                                                <td class="record-data" 
+                                                    data-id="<?= $row2['id'] ?>"
+                                                    data-date="<?= $dateResult ?>"
+                                                    data-product-code="<?= $product['product_code'] ?>"
+                                                    data-product-name="<?= $product['product_name'] ?>"
+                                                    data-scientific-name="<?= $product['scientific_name'] ?>"
+                                                    data-specification="<?= $product['specification'] ?>"
+                                                    data-size-range="<?= $product['size_range'] ?>"
+                                                    data-target-price="<?= $product['target_price'] ?>"
+                                                    data-buyer-name="<?= $buyer ?>"
+                                                    data-sold-price="<?= $row2['sold_price'] ?>"
+                                                    data-remark="<?= $product['remarks'] ?>">
+                                                    <?= number_format($row2['sold_price'],2) ?>
+                                                </td>
                                                 <?php
                                                 $totalPrice += $row2['sold_price'];
                                                 $buyerCount++;
+                                                $buyerPrices[$buyer] = $row2['id'];
                                             } else {?>
-                                                <td>-</td> // no price for this buyer
+                                                <td>-</td>  <!-- no price for this buyer -->
                                             <?php
                                             }
                                         }
@@ -268,20 +289,24 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\buyingprice
                                             <td>0.00</td>
                                         <?php } ?>
 
-                                        <td><?= htmlspecialchars($product['remarks']) ?></td>
                                         <td>
-                                            <button class='btn btn-sm btn-warning'>
-                                                Edit
+                                            <button class='btn btn-sm btn-warning edit-btn' 
+                                                    data-bs-toggle="modal" 
+                                                    data-bs-target="#editModal"
+                                                    data-date="<?= $dateResult ?>"
+                                                    data-product-code="<?= $product['product_code'] ?>"
+                                                    data-buyers='<?= json_encode($buyerPrices) ?>'>
+                                                <i class="fas fa-edit"></i>
                                             </button>
                                             &nbsp;
-                                            <button class='btn btn-sm btn-danger'>
-                                                Delete
+                                            <button class='btn btn-sm btn-danger delete-btn' data-bs-toggle="modal" data-bs-target="#deleteModal">
+                                                <i class="fas fa-trash"></i>
                                             </button>
                                         </td>
                                         </tr>
                                     <?php }
                                 } else {?>
-                                    <tr><td colspan='".(7 + count($buyers))."' class='text-center'>No records for $dateResult</td></tr>";
+                                    <tr><td colspan='<?php echo (7 + count($buyers)); ?>' class='text-center'>No records for <?= $dateResult ?></td></tr>
                                 <?php }?>
                             </tbody>
                         </table>
@@ -289,6 +314,135 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\buyingprice
                 </div>
             <?php endforeach; ?>
         </div>
+
+        <!-- Edit Selection Modal -->
+        <div class="modal fade" id="editModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Edit Record</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="editSelectionForm">
+                            <div class="col-md-12">
+                                <label>Select Buyer to Edit:</label>
+                                <select name="buyer_name" id="editBuyerSelect" class="form-select" required>
+                                    <option value="">Select Buyer To Edit</option>
+                                    <!-- Options will be populated by JavaScript -->
+                                </select>
+                            </div>
+                            <input type="hidden" id="editDate" name="date">
+                            <input type="hidden" id="editProductCode" name="product_code">
+                        </form>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn btn-primary" id="proceedToEditBtn">Edit</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Edit Info Modal -->
+        <div class="modal fade" id="editinfoModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Edit Buying Price Record</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <form method="post" class="row g-3" id="editInfoForm" novalidate autocomplete="off">
+                            <input type="hidden" name="record_id" id="record_id" />
+                            <input type="hidden" name="UpdateRecord" value="1" />
+                            <div class="col-md-12">
+                                <label>Date:</label>
+                                <input type="date" name="date" id="edit_date" class="form-control" required>
+                                <div class="invalid-feedback">Please enter a date.</div>
+                            </div>
+
+                            <div class="col-md-12">
+                                <label>Product Name:</label>
+                                <select name="product_name" id="edit_product_name" class="form-select" required onchange="fillEditProductDetails()">
+                                    <option value="">Select Product</option>
+                                    <?php foreach ($products as $product): ?>
+                                        <option
+                                            value="<?php echo htmlspecialchars($product['product_name']); ?>"
+                                            data-product-code="<?php echo htmlspecialchars($product['product_code']); ?>"
+                                            data-scientific-name="<?php echo htmlspecialchars($product['scientific_name']); ?>"
+                                            data-size-range="<?php echo htmlspecialchars($product['size_range']); ?>"
+                                            data-specification="<?php echo htmlspecialchars($product['specification']); ?>"
+                                            data-target-price="<?php echo htmlspecialchars($product['target_buying_price']); ?>"
+                                        >
+                                            <?php echo htmlspecialchars($product['product_name']); ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <div class="invalid-feedback">Please select a product.</div>
+                            </div>
+
+                            <input type="hidden" name="scientific_name" id="edit_scientific_name" />
+
+                            <div class="col-md-4">
+                                <label>Product Code:</label>
+                                <input type="text" name="product_code" id="edit_product_code" class="form-control" required readonly>
+                                <div class="invalid-feedback">Product code is required.</div>
+                            </div>
+
+                            <div class="col-md-4">
+                                <label>Size Range:</label>
+                                <input type="text" name="size_range" id="edit_size_range" class="form-control" required>
+                                <div class="invalid-feedback">Please enter the size range.</div>
+                            </div>
+
+                            <div class="col-md-4">
+                                <label>Specification:</label>
+                                <input type="text" name="specification" id="edit_specification" class="form-control" required>
+                                <div class="invalid-feedback">Please enter the specification.</div>
+                            </div>
+                            <div class="col-md-4">
+                                <label>Target Price:</label>
+                                <input type="number" step="0.01" name="target_price" id="edit_target_price" class="form-control" required>
+                                <div class="invalid-feedback">Please enter the target price.</div>
+                            </div>
+                            <div class="col-md-4">
+                                <label>Buyer Name:</label>
+                                <select name="buyer_name" id="edit_buyer_name" class="form-select" required>
+                                    <option value="">Select Buyer</option>
+                                    <option value="Madushan">Madushan</option>
+                                    <option value="Charith">Charith</option>
+                                    <option value="Miranda">Miranda</option>
+                                    <option value="Mahesh">Mahesh</option>
+                                    <option value="Safras">Safras</option>
+                                    <option value="Rijas">Rijas</option>
+                                    <option value="Layoma">Layoma</option>
+                                    <option value="Sameera">Sameera</option>
+                                    <option value="Sujan">Sujan</option>
+                                </select>
+                                <div class="invalid-feedback">Please select a buyer.</div>
+                            </div>
+                            <div class="col-md-4">
+                                <label>Buying Price:</label>
+                                <input type="number" step="0.01" name="sold_price" id="edit_sold_price" class="form-control" required>
+                                <div class="invalid-feedback">Please enter the buying price.</div>
+                            </div>
+                            <div class="col-md-12">
+                                <label>Remark (Optional):</label>
+                                <input type="text" name="remark" id="edit_remark" class="form-control">
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                                <button type="submit" class="btn btn-primary px-4">Save Changes</button>
+                                <button type="button" class="btn btn-danger" id="deleteBtn">Delete</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+
         <div class="tab-average mt-2">
             <div class="tab-pane fade" 
                 id="content-average" 
@@ -313,19 +467,18 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\buyingprice
                         $result = $conn->query($sql);
 
                         if ($result && $result->num_rows > 0) {
-                            while ($row = $result->fetch_assoc()) {
-                                echo "<tr class='text-center'>";
-                                echo "<td>".htmlspecialchars($row['product_code'])."</td>";
-                                echo "<td>".htmlspecialchars($row['product_name'])."</td>";
-                                echo "<td>".htmlspecialchars($row['size_range'])."</td>";
-                                echo "<td>".number_format($row['target_price'],2)."</td>";
-                                echo "<td>".number_format($row['average_price'],2)."</td>";
-                                echo "</tr>";
-                            }
-                        } else {
-                            echo "<tr><td colspan='5' class='text-center'>No records found</td></tr>";
-                        }
-                        ?>
+                            while ($row = $result->fetch_assoc()) {?>
+                                <tr class='text-center'>
+                                    <td><?= htmlspecialchars($row['product_code']) ?></td>
+                                    <td><?= htmlspecialchars($row['product_name']) ?></td>
+                                    <td><?= htmlspecialchars($row['size_range']) ?></td>
+                                    <td><?= number_format($row['target_price'],2) ?></td>
+                                    <td><?= number_format($row['average_price'],2) ?></td>
+                                </tr>
+                            <?php }
+                        } else {?>
+                            <tr><td colspan='5' class='text-center'>No records found</td></tr>
+                        <?php }?>
                     </tbody>
                 </table>
             </div>
@@ -345,6 +498,17 @@ function fillProductDetails() {
     document.getElementById('target_price').value = selectedOption.dataset.targetPrice || '';
 }
 
+function fillEditProductDetails() {
+    const productSelect = document.getElementById('edit_product_name');
+    const selectedOption = productSelect.options[productSelect.selectedIndex];
+
+    document.getElementById('edit_product_code').value = selectedOption.dataset.productCode || '';
+    document.getElementById('edit_scientific_name').value = selectedOption.dataset.scientificName || '';
+    document.getElementById('edit_size_range').value = selectedOption.dataset.sizeRange || '';
+    document.getElementById('edit_specification').value = selectedOption.dataset.specification || '';
+    document.getElementById('edit_target_price').value = selectedOption.dataset.targetPrice || '';
+}
+
 // Bootstrap 5 validation
 (function () {
     'use strict';
@@ -355,6 +519,15 @@ function fillProductDetails() {
             event.stopPropagation();
         }
         form.classList.add('was-validated');
+    }, false);
+    
+    const editForm = document.getElementById('editInfoForm');
+    editForm.addEventListener('submit', function(event) {
+        if (!editForm.checkValidity()) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        editForm.classList.add('was-validated');
     }, false);
 })();
 
@@ -381,6 +554,108 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
     });
+    
+    // Initialize average table
+    $('#averageTable').DataTable({
+        "pageLength": 10,
+        "ordering": true,
+        "searching": true,
+        "lengthChange": true
+    });
+});
+
+// Delete button functionality
+$('.delete-btn').click(function() {
+    const recordId = $(this).closest('tr').find('.record-data:first').data('id');
+    $('#confirmDelete').data('record-id', recordId);
+});
+
+// Confirm delete functionality
+$('#confirmDelete').click(function() {
+    const recordId = $(this).data('record-id');
+    if (recordId) {
+        $.post('BuyingPriceAnalysis.php', { id: recordId }, function(response) {
+            if (response.success) {
+                location.reload();
+            } else {
+                alert('Error deleting record: ' + response.message);
+            }
+        }).fail(function() {
+            alert('Error deleting record');
+        });
+    }
+    $('#deleteModal').modal('hide');
+});
+
+// Edit button functionality
+$('.edit-btn').click(function() {
+    const date = $(this).data('date');
+    const productCode = $(this).data('product-code');
+    const buyers = $(this).data('buyers');
+    
+    // Set the hidden fields
+    $('#editDate').val(date);
+    $('#editProductCode').val(productCode);
+    
+    // Clear and populate buyer select
+    $('#editBuyerSelect').empty().append('<option value="">Select Buyer To Edit</option>');
+    
+    for (const [buyerName, recordId] of Object.entries(buyers)) {
+        $('#editBuyerSelect').append(`<option value="${buyerName}" data-record-id="${recordId}">${buyerName}</option>`);
+    }
+});
+
+// Proceed to edit button
+$('#proceedToEditBtn').click(function() {
+    const selectedBuyer = $('#editBuyerSelect option:selected');
+    if (selectedBuyer.val() === '') {
+        alert('Please select a buyer to edit');
+        return;
+    }
+    
+    const recordId = selectedBuyer.data('record-id');
+    
+    // Find the table cell with the record data
+    const recordCell = $(`.record-data[data-id="${recordId}"]`);
+    
+    if (recordCell.length) {
+        // Populate the edit form with the record data
+        $('#record_id').val(recordId);
+        $('#edit_date').val(recordCell.data('date'));
+        $('#edit_product_code').val(recordCell.data('product-code'));
+        $('#edit_product_name').val(recordCell.data('product-name'));
+        $('#edit_scientific_name').val(recordCell.data('scientific-name'));
+        $('#edit_specification').val(recordCell.data('specification'));
+        $('#edit_size_range').val(recordCell.data('size-range'));
+        $('#edit_target_price').val(recordCell.data('target-price'));
+        $('#edit_buyer_name').val(recordCell.data('buyer-name'));
+        $('#edit_sold_price').val(recordCell.data('sold-price'));
+        $('#edit_remark').val(recordCell.data('remark'));
+        
+        // Close the selection modal and open the edit modal
+        $('#editModal').modal('hide');
+        $('#editinfoModal').modal('show');
+    } else {
+        alert('Record data not found');
+    }
+});
+
+// Delete button in edit modal
+$('#deleteBtn').click(function() {
+    const recordId = $('#record_id').val();
+    if (recordId) {
+        if (confirm('Are you sure you want to delete this record?')) {
+            $.post('BuyingPriceAnalysis.php', { id: recordId }, function(response) {
+                if (response.success) {
+                    location.reload();
+                } else {
+                    alert('Error deleting record: ' + response.message);
+                }
+            }).fail(function() {
+                alert('Error deleting record');
+            });
+        }
+    }
 });
 </script>
 </body>

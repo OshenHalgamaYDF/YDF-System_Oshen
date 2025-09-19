@@ -21,7 +21,8 @@ if (isset($_POST['SubmitOffel'])) {
     $buyer_name      = $_POST['buyer_name'];
     $sold_price      = $_POST['sold_price'];
     $remark          = $_POST['remark'];
-    // Check if record already exists (use prepared properly!)
+    
+    // Check if record already exists
     $checkSql = "SELECT 1 FROM buyingpriceanlaysistable 
                  WHERE date=? AND product_code=? AND buyer_name=? LIMIT 1";
     $checkStmt = $conn->prepare($checkSql);
@@ -36,17 +37,17 @@ if (isset($_POST['SubmitOffel'])) {
                 WHERE date=? AND product_code=? AND buyer_name=?";
         $stmt = $conn->prepare($sql);
         $stmt->bind_param(
-            "ssssddsss",
+            "ssssddssss",
             $product_name,
             $scientific_name,
             $size_range,
             $specification,
-            $target_price,   // d
-            $sold_price,     // d
+            $target_price,
+            $sold_price,
+            $remark,
             $date,
             $product_code,
-            $buyer_name,
-            $remark
+            $buyer_name
         );
     } else {
         // Insert new
@@ -62,7 +63,7 @@ if (isset($_POST['SubmitOffel'])) {
             $scientific_name,
             $size_range,
             $specification,
-            $target_price,   // d
+            $target_price,
             $buyer_name,
             $sold_price,
             $remark
@@ -80,7 +81,52 @@ if (isset($_POST['SubmitOffel'])) {
     $stmt->close();
 }
 
-// Fetch products for dropdown - UPDATED with new column names
+// Handle update from edit modal
+if (isset($_POST['UpdateRecord'])) {
+    $record_id       = $_POST['record_id'];
+    $product_code    = $_POST['product_code'];
+    $date            = $_POST['date'];
+    $product_name    = $_POST['product_name'];
+    $scientific_name = $_POST['scientific_name'];
+    $size_range      = $_POST['size_range'];
+    $specification   = $_POST['specification'];
+    $target_price    = $_POST['target_price'];
+    $buyer_name      = $_POST['buyer_name'];
+    $sold_price      = $_POST['sold_price'];
+    $remark          = $_POST['remark'];
+    
+    $sql = "UPDATE buyingpriceanlaysistable 
+            SET product_code=?, date=?, product_name=?, scientific_name=?, size_range=?, specification=?, 
+            target_price=?, buyer_name=?, sold_price=?, remark=?
+            WHERE id=?";
+    
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param(
+        "ssssssdsssi",
+        $product_code,
+        $date,
+        $product_name,
+        $scientific_name,
+        $size_range,
+        $specification,
+        $target_price,
+        $buyer_name,
+        $sold_price,
+        $remark,
+        $record_id
+    );
+    
+    if ($stmt->execute()) {
+        header("Location: BuyingPriceAnalysis.php");
+        exit();
+    } else {
+        echo "Error: " . $stmt->error;
+    }
+    
+    $stmt->close();
+}
+
+// Fetch products for dropdown
 $products = [];
 $result = $conn->query("
 SELECT p.*, tbp.*
@@ -106,23 +152,35 @@ while ($row = $dateResult->fetch_assoc()) {
     $dateselected[] = $row['date'];
 }
 
-$count =0;
+$count = 0;
 $avgprices = 0;
 
+/**
+ * Distinct Product IDs used for grouping tabs
+ */
+$productIds = [];
+$idResult = $conn->query("SELECT DISTINCT product_code FROM buyingpriceanlaysistable");
+while ($row = $idResult->fetch_assoc()) {
+    $productIds[] = $row['product_code'];
+}
+
+/**
+ * Delete Record
+ */
 if (isset($_POST['id'])) {
     $id = $_POST['id'];
-    
     $sql = "DELETE FROM buyingpriceanlaysistable WHERE id = ?";
     $stmt = $conn->prepare($sql);
     $stmt->bind_param("i", $id);
-    
     if ($stmt->execute()) {
         echo json_encode(['success' => true]);
     } else {
         echo json_encode(['success' => false, 'message' => $stmt->error]);
     }
-    
     $stmt->close();
-} 
+    exit();
+}
 
+// Get current date for edit modal
+$currentDate = isset($dateselected[0]) ? $dateselected[0] : date('Y-m-d');
 ?>
