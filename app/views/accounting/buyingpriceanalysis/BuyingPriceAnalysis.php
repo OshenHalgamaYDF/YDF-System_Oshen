@@ -296,7 +296,7 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\buyingprice
                                                     data-date="<?= $dateResult ?>"
                                                     data-product-code="<?= $product['product_code'] ?>"
                                                     data-buyers='<?= json_encode($buyerPrices) ?>'>
-                                                <i class="fas fa-edit"></i>
+                                                <i class="fas fa-info"></i>
                                             </button>
                                             &nbsp;
                                             <button class='btn btn-sm btn-danger delete-btn' data-bs-toggle="modal" data-bs-target="#deleteModal">
