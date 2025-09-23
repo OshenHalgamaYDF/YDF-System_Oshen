@@ -225,7 +225,7 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\buyingprice
                 </button>
             </li>
         </ul>
-        <!--Graphnic Tab Content-->
+        <!--Graph Tab Content-->
         <div class="tab-content mt-2">
             <div class="tab-pane fade" id="content-statistics" role="tabpanel">
                 <div class="alert alert-info text-center">

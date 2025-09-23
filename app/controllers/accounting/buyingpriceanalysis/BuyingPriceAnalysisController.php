@@ -207,4 +207,46 @@ $dateselected = [];
 while ($row = $dateResult->fetch_assoc()) {
     $dateselected[] = $row['date'];
 }
+
+// Get selected year from GET parameter or use current year
+$selectedYear = isset($_GET['year']) ? intval($_GET['year']) : date('Y');
+
+// Get available years from the database
+$yearSql = "SELECT DISTINCT YEAR(STR_TO_DATE(date, '%Y-%m-%d')) as year 
+            FROM buyingpriceanlaysistable 
+            ORDER BY year DESC";
+$yearResult = $conn->query($yearSql);
+$availableYears = [];
+if ($yearResult && $yearResult->num_rows > 0) {
+    while ($yearRow = $yearResult->fetch_assoc()) {
+        $availableYears[] = $yearRow['year'];
+    }
+}
+
+// Get distinct months for the selected year
+$monthSql = "SELECT DISTINCT DATE_FORMAT(STR_TO_DATE(date, '%Y-%m-%d'), '%Y-%m') as month_code,
+                     DATE_FORMAT(STR_TO_DATE(date, '%Y-%m-%d'), '%M %Y') as month_name 
+                     FROM buyingpriceanlaysistable 
+                     WHERE YEAR(STR_TO_DATE(date, '%Y-%m-%d')) = $selectedYear
+                     ORDER BY month_code ASC";
+        
+$monthResult = $conn->query($monthSql);
+$months = [];
+if ($monthResult && $monthResult->num_rows > 0) {
+    while ($monthRow = $monthResult->fetch_assoc()) {
+        $months[] = $monthRow;
+    }
+}
+
+// Get distinct products
+$productSql = "SELECT DISTINCT product_code, product_name, scientific_name 
+               FROM buyingpriceanlaysistable 
+               ORDER BY product_name";
+$productResult = $conn->query($productSql);
+$products = [];
+if ($productResult && $productResult->num_rows > 0) {
+    while ($productRow = $productResult->fetch_assoc()) {
+        $products[] = $productRow;
+    }
+}
 ?>
