@@ -276,7 +276,7 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\supplierled
                                                     <td><?php echo htmlspecialchars($row['remark'] ?? ''); ?></td>
                                                     <td>
                                                         <button class='btn btn-sm btn-warning editBtn' 
-                                                                data-id='<?php echo $row['ID']; ?>' 
+                                                                data-id='<?php echo $row['id']; ?>' 
                                                                 data-date='<?php echo $row['date']; ?>' 
                                                                 data-supplier_name='<?php echo htmlspecialchars($row['supplier_name']); ?>' 
                                                                 data-ref_no='<?php echo htmlspecialchars($row['ref_no']); ?>' 
@@ -295,7 +295,7 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\supplierled
                                                                 ?>'>
                                                             <i class="fas fa-edit"></i>
                                                         </button>
-                                                        <a href='?delete_id=<?php echo $row['ID']; ?>' 
+                                                        <a href='?delete_id=<?php echo $row['id']; ?>' 
                                                            class='btn btn-sm btn-danger' 
                                                            onclick='return confirm("Are you sure you want to delete this record?")'>
                                                             <i class="fas fa-trash"></i>

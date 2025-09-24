@@ -14,7 +14,7 @@ if (mysqli_connect_errno()) {
 // Handle DELETE operation first
 if (isset($_GET['delete_id'])) {
     $delete_id = intval($_GET['delete_id']);
-    $stmt = $conn->prepare("DELETE FROM supplierledger WHERE ID = ?");
+    $stmt = $conn->prepare("DELETE FROM supplierledger WHERE id = ?");
     if ($stmt) {
         $stmt->bind_param("i", $delete_id);
         if ($stmt->execute()) {
@@ -144,4 +144,31 @@ foreach ($allRecords as $record) {
     }
     $recordsBySupplier[$supplier][] = $record;
 }
+
+// SLS php
+$suppliersummary = []; // initialize
+$suppliersummarydata = $conn->query("
+    SELECT supplier_name,
+           SUM(`credit(LKR)`) AS total_credit_lkr,
+           SUM(`debit(LKR)`)  AS total_debit_lkr,
+           (SUM(`credit(LKR)`) - SUM(`debit(LKR)`)) AS balance_lkr,
+           SUM(`credit($)`)   AS total_credit_usd,
+           SUM(`debit($)`)    AS total_debit_usd,
+           (SUM(`credit($)`) - SUM(`debit($)`)) AS balance_usd
+    FROM supplierledger
+    GROUP BY supplier_name
+    ORDER BY supplier_name ASC
+");
+
+if ($suppliersummarydata){
+    while ($row = $suppliersummarydata->fetch_assoc()){
+        $suppliersummary[] = $row; // keep whole row
+    }
+}else{
+    die("Error fetching suppliers: " . $conn->error);
+}
+
+
+
+
 ?>
