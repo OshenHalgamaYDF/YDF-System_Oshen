@@ -1,4 +1,5 @@
 <?php
+// Database connection and data processing should be at the TOP
 $servername = "localhost";
 $username = "root";
 $password = "";
@@ -10,61 +11,7 @@ if (mysqli_connect_errno()) {
     die("Connection failed: " . mysqli_connect_error());
 }
 
-// Input of ledger record
-if (isset($_POST['SubmitSupplierLedger']) || isset($_POST['UpdateSupplierLedger'])) {
-    // Validate and sanitize inputs
-    $id = isset($_POST['record_id']) ? intval($_POST['record_id']) : 0;
-    $datele = isset($_POST['date']) ? mysqli_real_escape_string($conn, trim($_POST['date'])) : '';
-    $supplierle = isset($_POST['supplier_name']) ? mysqli_real_escape_string($conn, trim($_POST['supplier_name'])) : '';
-    $refle = isset($_POST['reference_number']) ? mysqli_real_escape_string($conn, trim($_POST['reference_number'])) : '';
-    $describle = isset($_POST['description']) ? mysqli_real_escape_string($conn, trim($_POST['description'])) : '';
-    $creditle = isset($_POST['credit']) ? floatval($_POST['credit']) : 0;
-    $debitle = isset($_POST['debit']) ? floatval($_POST['debit']) : 0;
-
-    // Validate required fields
-    if (empty($datele) || empty($supplierle) || empty($refle) || empty($describle)) {
-        die("Error: All fields are required.");
-    }
-
-    // Validate date format
-    if (!DateTime::createFromFormat('Y-m-d', $datele)) {
-        die("Error: Invalid date format.");
-    }
-
-    if ($id > 0 && isset($_POST['UpdateSupplierLedger'])) {
-        // UPDATE query
-        $stmt = $conn->prepare("UPDATE supplierledger SET date=?, supplier_name=?, ref_no=?, description=?, credit=?, debit=? WHERE ID=?");
-        if (!$stmt) {
-            die("Error preparing statement: " . $conn->error);
-        }
-        $stmt->bind_param("ssssddi", $datele, $supplierle, $refle, $describle, $creditle, $debitle, $id);
-        
-        if ($stmt->execute()) {
-            header("Location: SupplierLedgerInput.php");
-            exit();
-        } else {
-            echo "Error updating record: " . $stmt->error;
-        }
-    } else {
-        // INSERT query
-        $stmt = $conn->prepare("INSERT INTO supplierledger (date, supplier_name, ref_no, description, credit, debit) VALUES (?, ?, ?, ?, ?, ?)");
-        if (!$stmt) {
-            die("Error preparing statement: " . $conn->error);
-        }
-        $stmt->bind_param("ssssdd", $datele, $supplierle, $refle, $describle, $creditle, $debitle);
-        
-        if ($stmt->execute()) {
-            header("Location: SupplierLedgerInput.php");
-            exit();
-        } else {
-            echo "Error adding record: " . $stmt->error;
-        }
-    }
-    
-    $stmt->close();
-}
-
-// Handle record deletion (if needed)
+// Handle DELETE operation first
 if (isset($_GET['delete_id'])) {
     $delete_id = intval($_GET['delete_id']);
     $stmt = $conn->prepare("DELETE FROM supplierledger WHERE ID = ?");
@@ -80,10 +27,71 @@ if (isset($_GET['delete_id'])) {
     }
 }
 
-// Output the table of supplier ledger - get all records
-$result = $conn->query("SELECT * FROM supplierledger ORDER BY date ASC, supplier_name ASC");
-if (!$result) {
-    die("Error fetching records: " . $conn->error);
+// Handle INSERT/UPDATE operations
+if (isset($_POST['SubmitSupplierLedger']) || isset($_POST['UpdateSupplierLedger'])) {
+    // Validate and sanitize inputs
+    $id = isset($_POST['record_id']) ? intval($_POST['record_id']) : 0;
+    $datele = isset($_POST['date']) ? mysqli_real_escape_string($conn, trim($_POST['date'])) : '';
+    $supplierle = isset($_POST['supplier_name']) ? mysqli_real_escape_string($conn, trim($_POST['supplier_name'])) : '';
+    $refle = isset($_POST['reference_number']) ? mysqli_real_escape_string($conn, trim($_POST['reference_number'])) : '';
+    $describle = isset($_POST['description']) ? mysqli_real_escape_string($conn, trim($_POST['description'])) : '';
+    $creditle = isset($_POST['credit']) ? floatval($_POST['credit']) : 0;
+    $debitle = isset($_POST['debit']) ? floatval($_POST['debit']) : 0;
+    $remark = isset($_POST['remark']) ? mysqli_real_escape_string($conn, trim($_POST['remark'])) : '';
+    $creditleDol = isset($_POST['creditDol']) ? floatval($_POST['creditDol']) : 0;
+    $debitleDol = isset($_POST['debitDol']) ? floatval($_POST['debitDol']) : 0;
+    $typeSelect = isset($_POST['TypeSelect']) ? mysqli_real_escape_string($conn, trim($_POST['TypeSelect'])) : '';
+
+    // Validate required fields
+    if (empty($datele) || empty($supplierle) || empty($refle) || empty($describle) || empty($typeSelect)) {
+        die("Error: All fields are required.");
+    }
+
+    // Validate date format
+    if (!DateTime::createFromFormat('Y-m-d', $datele)) {
+        die("Error: Invalid date format.");
+    }
+
+    // Reset amounts based on selected type
+    if ($typeSelect === 'LKR') {
+        $creditleDol = 0;
+        $debitleDol = 0;
+    } elseif ($typeSelect === 'Dollar') {
+        $creditle = 0;
+        $debitle = 0;
+    }
+
+    if ($id > 0 && isset($_POST['UpdateSupplierLedger'])) {
+        // UPDATE query
+        $stmt = $conn->prepare("UPDATE supplierledger SET date=?, supplier_name=?, ref_no=?, description=?, `credit(LKR)`=?, `debit(LKR)`=?, `credit($)`=?, `debit($)`=?, remark=? WHERE ID=?");
+        if (!$stmt) {
+            die("Error preparing statement: " . $conn->error);
+        }
+        $stmt->bind_param("ssssddddsi", $datele, $supplierle, $refle, $describle, $creditle, $debitle, $creditleDol, $debitleDol, $remark, $id);
+        
+        if ($stmt->execute()) {
+            header("Location: SupplierLedgerInput.php");
+            exit();
+        } else {
+            echo "Error updating record: " . $stmt->error;
+        }
+        $stmt->close();
+    } elseif (isset($_POST['SubmitSupplierLedger'])) {
+        // INSERT query
+        $stmt = $conn->prepare("INSERT INTO supplierledger (date, supplier_name, ref_no, description, `credit(LKR)`, `debit(LKR)`, `credit($)`, `debit($)`, remark) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        if (!$stmt) {
+            die("Error preparing statement: " . $conn->error);
+        }
+        $stmt->bind_param("ssssdddds", $datele, $supplierle, $refle, $describle, $creditle, $debitle, $creditleDol, $debitleDol, $remark);
+        
+        if ($stmt->execute()) {
+            header("Location: SupplierLedgerInput.php");
+            exit();
+        } else {
+            echo "Error adding record: " . $stmt->error;
+        }
+        $stmt->close();
+    }
 }
 
 // Get distinct supplier names
@@ -100,12 +108,31 @@ if ($supplierresult) {
     die("Error fetching suppliers: " . $conn->error);
 }
 
-// Store all records in an array for tab filtering
-$allRecords = [];
-if ($result->num_rows > 0) {
-    while ($row = $result->fetch_assoc()) {
-        $allRecords[] = $row;
+// Get Supplier name form supplier table
+$supplierDD = [];
+$supplierDDcollection = $conn->query(" SELECT name 
+                                        FROM suppliers
+                                        ORDER BY name ASC");
+
+if ($supplierDDcollection){
+    while ($row = $supplierDDcollection-> fetch_assoc()){
+        $supplierDD[] = $row['name'];
     }
+}else{
+    die("Error fetching suppliers: " . $conn->error);
+}
+
+// Get all records
+$allRecords = [];
+$result = $conn->query("SELECT * FROM supplierledger ORDER BY date ASC, supplier_name ASC");
+if ($result) {
+    if ($result->num_rows > 0) {
+        while ($row = $result->fetch_assoc()) {
+            $allRecords[] = $row;
+        }
+    }
+} else {
+    die("Error fetching records: " . $conn->error);
 }
 
 // Group records by supplier for the tabs

@@ -11,15 +11,45 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\supplierled
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
+    <!-- jQuery FIRST -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    
+    <!-- DataTables CSS -->
+    <link href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+    
     <!-- DataTables JS -->
     <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
     <script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
 
-    <!-- DataTables CSS -->
-    <link href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
-    <!-- jQuery FIRST -->
-    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <style>
+        table.dataTable tfoot td {
+            white-space: nowrap;
+        }
+
+        table.dataTable {
+            width: 100% !important;
+            table-layout: auto;
+        }
+        .hidden {
+            display: none !important;
+        }
+        .currency-section {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+        .table th {
+            white-space: nowrap;
+        }
+        .hidden-column {
+            display: none;
+        }
+    </style>
 </head>
 <body>
     <div class="container mt-4">
@@ -34,7 +64,7 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\supplierled
             </button>
         </div>
 
-        <!-- Modal -->
+        <!-- Modal-->
         <div class="modal fade" id="supplierLedgerModal" tabindex="-1" aria-labelledby="supplierLedgerModalLabel" aria-hidden="true">
             <div class="modal-dialog">
                 <div class="modal-content">
@@ -52,15 +82,16 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\supplierled
 
                             <div class="col-md-12">
                                 <label>Supplier Name:</label>
-                                <input type="text" name="supplier_name" id="supplier_name" class="form-control" required list="supplierSuggestions">
-                                <datalist id="supplierSuggestions">
-                                    <?php foreach ($suppliername as $supplier): ?>
+                                <select name="supplier_name" id="supplier_name" class="form-select" required>
+                                    <option value="">-- Select a Supplier --</option>
+                                    <?php foreach ($supplierDD as $supplier): ?>
                                         <option value="<?php echo htmlspecialchars($supplier); ?>">
+                                            <?php echo htmlspecialchars($supplier); ?>
+                                        </option>
                                     <?php endforeach; ?>
-                                </datalist>
-                                <div class="invalid-feedback">Please enter a supplier name.</div>
+                                </select>
+                                <div class="invalid-feedback">Please select a supplier name.</div>
                             </div>
-
                             <div class="col-md-6">
                                 <label>Reference Number:</label>
                                 <input type="text" name="reference_number" id="reference_number" class="form-control" required>
@@ -72,17 +103,46 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\supplierled
                                 <input type="text" name="description" id="description" class="form-control" required>
                                 <div class="invalid-feedback">Please enter the description.</div>
                             </div>
-
-                            <div class="col-md-6">
-                                <label>Credit:</label>
-                                <input type="number" step="0.01" name="credit" id="credit" class="form-control" value="0" required>
-                                <div class="invalid-feedback">Please enter the credit amount.</div>
+                            
+                            <div class="col-md-12">
+                                <label for="TypeSelect">Choose the record type:</label>
+                                <select id="TypeSelect" name="TypeSelect" class="form-select" required>
+                                    <option value="">-- Select a Type--</option>
+                                    <option value="LKR">Enter in LKR only</option>
+                                    <option value="Dollar">Enter in $ only</option>
+                                    <option value="both">Enter Both Types</option>
+                                </select>
+                                <div class="invalid-feedback">Please Select a Type.</div> 
                             </div>
 
-                            <div class="col-md-6">
-                                <label>Debit:</label>
-                                <input type="number" step="0.01" name="debit" id="debit" class="form-control" value="0" required>
-                                <div class="invalid-feedback">Please enter the debit amount.</div>
+                            <div id="CreditLKR" class="col-md-6 hidden">
+                                <label>Credit (LKR):</label>
+                                <input type="number" step="0.01" name="credit" id="credit" class="form-control" value="0">
+                                <div class="invalid-feedback">Please enter the credit amount (LKR).</div>
+                            </div>
+
+                            <div id="DebitLKR" class="col-md-6 hidden">
+                                <label>Debit (LKR):</label>
+                                <input type="number" step="0.01" name="debit" id="debit" class="form-control" value="0">
+                                <div class="invalid-feedback">Please enter the debit amount (LKR).</div>
+                            </div>
+
+                            <div id="CreditDol" class="col-md-6 hidden">
+                                <label>Credit ($):</label>
+                                <input type="number" step="0.01" name="creditDol" id="creditDol" class="form-control" value="0">
+                                <div class="invalid-feedback">Please enter the credit amount ($).</div>
+                            </div>
+
+                            <div id="DebitDol" class="col-md-6 hidden">
+                                <label>Debit ($):</label>
+                                <input type="number" step="0.01" name="debitDol" id="debitDol" class="form-control" value="0">
+                                <div class="invalid-feedback">Please enter the debit amount ($).</div>
+                            </div>
+
+                            <div class="col-md-12">
+                                <label>Remark:</label>
+                                <input type="text" name="remark" id="remark" class="form-control">
+                                <div class="invalid-feedback">Please enter remark.</div>
                             </div>
                             
                             <input type="hidden" name="record_id" id="record_id" value="">
@@ -96,8 +156,10 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\supplierled
                 </div>
             </div>
         </div>
-
+        
+        <!-- Navbar-->
         <div class="container mt-4">
+            <!-- Tables Navbar-->
             <ul class="nav nav-underline" id="supplierTabs" role="tablist">
                 <?php if (count($suppliername) > 0): ?>
                     <?php foreach ($suppliername as $index => $name): ?>
@@ -118,46 +180,100 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\supplierled
                     </li>
                 <?php endif; ?>
             </ul>
-
+            <!-- Table content-->
             <div class="tab-content mt-2">
                 <?php if (count($suppliername) > 0): ?>
                     <?php foreach ($suppliername as $index => $name): ?>
+                        <?php
+                        $supplierRecords = isset($recordsBySupplier[$name]) ? $recordsBySupplier[$name] : [];
+                        $hasLKR = false;
+                        $hasUSD = false;
+                        
+                        // Check what currencies exist for this supplier
+                        foreach ($supplierRecords as $row) {
+                            if ($row['credit(LKR)'] > 0 || $row['debit(LKR)'] > 0) {
+                                $hasLKR = true;
+                            }
+                            if (isset($row['credit($)']) && ($row['credit($)'] > 0 || (isset($row['debit($)']) && $row['debit($)'] > 0))) {
+                                $hasUSD = true;
+                            }
+                            // If we found both, no need to continue checking
+                            if ($hasLKR && $hasUSD) break;
+                        }
+                        
+                        // Determine column structure
+                        $lkrColumns = 3; // Credit LKR, Debit LKR, Balance LKR
+                        $usdColumns = 3; // Credit USD, Debit USD, Balance USD
+                        $baseColumns = 4; // Date, Supplier, Ref No, Description
+                        $otherColumns = 2; // Remark, Actions
+                        
+                        $totalColumns = $baseColumns + $otherColumns;
+                        if ($hasLKR) $totalColumns += $lkrColumns;
+                        if ($hasUSD) $totalColumns += $usdColumns;
+                        ?>
                         <div class="tab-pane fade <?php echo $index === 0 ? 'show active' : ''; ?>" 
                              id="content-<?php echo md5($name); ?>" 
                              role="tabpanel">
                             <div class="table-responsive">
-                                <table class="table table-bordered table-striped supplier-ledger-table">
+                                <table class="table table-bordered table-striped supplier-ledger-table" id="table-<?php echo md5($name); ?>" data-has-lkr="<?php echo $hasLKR ? 'true' : 'false'; ?>" data-has-usd="<?php echo $hasUSD ? 'true' : 'false'; ?>">
                                     <thead class="table-dark">
                                         <tr>
                                             <th>Date</th>
                                             <th>Supplier Name</th>
                                             <th>Reference Number</th>
                                             <th>Description</th>
-                                            <th>Credit</th>
-                                            <th>Debit</th>
-                                            <th>Balance</th>
+                                            
+                                            <?php if ($hasLKR): ?>
+                                                <th>Credit (LKR)</th>
+                                                <th>Debit (LKR)</th>
+                                                <th>Balance (LKR)</th>
+                                            <?php endif; ?>
+                                            
+                                            <?php if ($hasUSD): ?>
+                                                <th>Credit ($)</th>
+                                                <th>Debit ($)</th>
+                                                <th>Balance ($)</th>
+                                            <?php endif; ?>
+                                            
+                                            <th>Remark</th>
                                             <th>Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         <?php
-                                        $supplierRecords = isset($recordsBySupplier[$name]) ? $recordsBySupplier[$name] : [];
-                                        $balance = 0;
+                                        $balanceLKR = 0;
+                                        $balanceUSD = 0;
                                         
                                         if (count($supplierRecords) > 0) {
                                             foreach ($supplierRecords as $row) {
-                                                $balance += $row['credit'] - $row['debit'];
+                                                $balanceLKR += ($row['credit(LKR)'] - $row['debit(LKR)']);
+                                                $creditUSD = isset($row['credit($)']) ? $row['credit($)'] : 0;
+                                                $debitUSD = isset($row['debit($)']) ? $row['debit($)'] : 0;
+                                                $balanceUSD += ($creditUSD - $debitUSD);
                                                 ?>
                                                 <tr>
                                                     <td><?php echo htmlspecialchars($row['date']); ?></td>
                                                     <td><?php echo htmlspecialchars($row['supplier_name']); ?></td>
                                                     <td><?php echo htmlspecialchars($row['ref_no']); ?></td>
                                                     <td><?php echo htmlspecialchars($row['description']); ?></td>
-                                                    <td class="text-success"><?php echo number_format($row['credit'], 2); ?></td>
-                                                    <td class="text-danger"><?php echo number_format($row['debit'], 2); ?></td>
-                                                    <td class="fw-bold <?php echo $balance >= 0 ? 'text-success' : 'text-danger'; ?>">
-                                                        <?php echo number_format($balance, 2); ?>
-                                                    </td>
+                                                    
+                                                    <?php if ($hasLKR): ?>
+                                                        <td class="text-success"><?php echo number_format($row['credit(LKR)'], 2); ?></td>
+                                                        <td class="text-danger"><?php echo number_format($row['debit(LKR)'], 2); ?></td>
+                                                        <td class="fw-bold <?php echo $balanceLKR >= 0 ? 'text-success' : 'text-danger'; ?>">
+                                                            <?php echo number_format($balanceLKR, 2); ?>
+                                                        </td>
+                                                    <?php endif; ?>
+                                                    
+                                                    <?php if ($hasUSD): ?>
+                                                        <td class="text-success"><?php echo number_format($creditUSD, 2); ?></td>
+                                                        <td class="text-danger"><?php echo number_format($debitUSD, 2); ?></td>
+                                                        <td class="fw-bold <?php echo $balanceUSD >= 0 ? 'text-success' : 'text-danger'; ?>">
+                                                            <?php echo number_format($balanceUSD, 2); ?>
+                                                        </td>
+                                                    <?php endif; ?>
+                                                    
+                                                    <td><?php echo htmlspecialchars($row['remark'] ?? ''); ?></td>
                                                     <td>
                                                         <button class='btn btn-sm btn-warning editBtn' 
                                                                 data-id='<?php echo $row['ID']; ?>' 
@@ -165,31 +281,71 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\supplierled
                                                                 data-supplier_name='<?php echo htmlspecialchars($row['supplier_name']); ?>' 
                                                                 data-ref_no='<?php echo htmlspecialchars($row['ref_no']); ?>' 
                                                                 data-description='<?php echo htmlspecialchars($row['description']); ?>' 
-                                                                data-credit='<?php echo $row['credit']; ?>' 
-                                                                data-debit='<?php echo $row['debit']; ?>'>
-                                                            Edit
+                                                                data-credit='<?php echo $row['credit(LKR)']; ?>' 
+                                                                data-debit='<?php echo $row['debit(LKR)']; ?>'
+                                                                data-creditdol='<?php echo $creditUSD; ?>'
+                                                                data-debitdol='<?php echo $debitUSD; ?>'
+                                                                data-remark='<?php echo htmlspecialchars($row['remark'] ?? ''); ?>'
+                                                                data-typesel='<?php 
+                                                                    $hasLKRRecord = $row['credit(LKR)'] > 0 || $row['debit(LKR)'] > 0;
+                                                                    $hasUSDRecord = $creditUSD > 0 || $debitUSD > 0;
+                                                                    if ($hasLKRRecord && $hasUSDRecord) echo 'both';
+                                                                    elseif ($hasUSDRecord) echo 'Dollar';
+                                                                    else echo 'LKR';
+                                                                ?>'>
+                                                            <i class="fas fa-edit"></i>
                                                         </button>
                                                         <a href='?delete_id=<?php echo $row['ID']; ?>' 
                                                            class='btn btn-sm btn-danger' 
                                                            onclick='return confirm("Are you sure you want to delete this record?")'>
-                                                            Delete
+                                                            <i class="fas fa-trash"></i>
                                                         </a>
                                                     </td>
                                                 </tr>
                                                 <?php
                                             } ?>
-                                            <tr>
-                                                <td colspan ='8' class = "fw-bold text-center">Amount to be settled LKR <?php echo number_format($balance);?></td>
-                                            </tr>
+                                    </tbody>
+                                    <tfoot>
+                                        <tr class="table-info">
+                                            <td colspan="6" class="fw-bold text-end">
+                                                Amount to be settled:
+                                            </td>
+                                            
+                                            <?php if ($hasLKR): ?>
+                                                <td class="fw-bold text-center <?php echo $balanceLKR >= 0 ? 'text-success' : 'text-danger'; ?>">
+                                                    LKR <?php echo number_format($balanceLKR, 2); ?>
+                                                </td>
+                                            <?php endif; ?>
+                                            
+                                            <?php if ($hasUSD): ?>
+                                                <td></td>
+                                                <td></td>
+                                                <td class="fw-bold text-center <?php echo $balanceUSD >= 0 ? 'text-success' : 'text-danger'; ?>">
+                                                    $ <?php echo number_format($balanceUSD, 2); ?>
+                                                </td>
+                                            <?php endif; ?>
+                                            
+                                            <td colspan="2"></td>
+                                        </tr>
+                                        
+                                        <?php if ($hasLKR && $hasUSD): ?>
+                                        <tr class="table-warning">
+                                            <td colspan="<?php echo $totalColumns; ?>" class="fw-bold text-center">
+                                                Total Payable: 
+                                                LKR <?php echo number_format($balanceLKR, 2); ?> | 
+                                                $ <?php echo number_format($balanceUSD, 2); ?>
+                                            </td>
+                                        </tr>
+                                        <?php endif; ?>
+                                    </tfoot>
                                         <?php } else {
                                             ?>
                                             <tr>
-                                                <td colspan='8' class='text-center'>No records found for <?php echo htmlspecialchars($name); ?></td>
+                                                <td colspan='<?php echo $totalColumns; ?>' class='text-center'>No records found for <?php echo htmlspecialchars($name); ?></td>
                                             </tr>
                                             <?php
                                         }
                                         ?>
-                                    </tbody>
                                 </table>
                             </div>
                         </div>
@@ -203,79 +359,149 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\supplierled
         </div>
     </div>
 
-    <script>
-        // Form validation
-        (function() {
-            'use strict';
-            var form = document.getElementById('supplierLedgerForm');
+<script>
+    // Form validation
+    (function() {
+        'use strict';
+        var form = document.getElementById('supplierLedgerForm');
+        
+        form.addEventListener('submit', function(event) {
+            if (!form.checkValidity()) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            form.classList.add('was-validated');
+        }, false);
+    })();
+
+   //Input Type select
+   const dropdown = document.getElementById('TypeSelect');
+   const creditlkrField = document.getElementById('CreditLKR');
+   const debitlkrField = document.getElementById('DebitLKR');
+   const creditdolField = document.getElementById('CreditDol');
+   const debitdolField = document.getElementById('DebitDol');
+
+    dropdown.addEventListener('change', function() {
+        // Hide all first
+        creditlkrField.classList.add('hidden');
+        debitlkrField.classList.add('hidden');
+        creditdolField.classList.add('hidden');
+        debitdolField.classList.add('hidden');
+
+        // Remove required attributes first
+        document.getElementById('credit').removeAttribute('required');
+        document.getElementById('debit').removeAttribute('required');
+        document.getElementById('creditDol').removeAttribute('required');
+        document.getElementById('debitDol').removeAttribute('required');
+
+        // Show based on selected value and set required attributes
+        if (this.value === 'LKR') {
+            creditlkrField.classList.remove('hidden');
+            debitlkrField.classList.remove('hidden');
+            document.getElementById('credit').setAttribute('required', 'required');
+            document.getElementById('debit').setAttribute('required', 'required');
+        } else if (this.value === 'Dollar') {
+            creditdolField.classList.remove('hidden');
+            debitdolField.classList.remove('hidden');
+            document.getElementById('creditDol').setAttribute('required', 'required');
+            document.getElementById('debitDol').setAttribute('required', 'required');
+        } else if (this.value === 'both') {
+            creditlkrField.classList.remove('hidden');
+            debitlkrField.classList.remove('hidden');
+            creditdolField.classList.remove('hidden');
+            debitdolField.classList.remove('hidden');
+            document.getElementById('credit').setAttribute('required', 'required');
+            document.getElementById('debit').setAttribute('required', 'required');
+            document.getElementById('creditDol').setAttribute('required', 'required');
+            document.getElementById('debitDol').setAttribute('required', 'required');
+        }
+    });
+
+    // Initialize when DOM is ready
+    $(document).ready(function() {
+        // Initialize DataTables for each supplier table with dynamic column handling
+        $('.supplier-ledger-table').each(function() {
+            const table = $(this);
+            const hasLKR = table.data('has-lkr') === 'true';
+            const hasUSD = table.data('has-usd') === 'true';
             
-            form.addEventListener('submit', function(event) {
-                if (!form.checkValidity()) {
-                    event.preventDefault();
-                    event.stopPropagation();
-                }
-                form.classList.add('was-validated');
-            }, false);
-        })();
+            // Determine which columns are sortable (exclude remark and actions)
+            let nonSortableColumns = [];
+            let baseColumns = 4; // Date, Supplier, Ref No, Description
+            
+            if (hasLKR) baseColumns += 3;
+            if (hasUSD) baseColumns += 3;
+            
+            // Remark and Actions are the last 2 columns
+            nonSortableColumns.push(baseColumns); // Remark column
+            nonSortableColumns.push(baseColumns + 1); // Actions column
 
-        // Initialize DataTables when DOM is ready
-        document.addEventListener('DOMContentLoaded', function() {
-            // Initialize DataTables for each supplier table
-            $('.supplier-ledger-table').each(function() {
-                $(this).DataTable({
-                    "pageLength": 10,
-                    "ordering": true,
-                    "searching": true,
-                    "lengthChange": true,
-                    "info": true,
-                    "paging": true
-                });
-            });
+           table.DataTable({
+               "pageLength": 10,
+               "ordering": true,
+               "searching": true,
+               "lengthChange": true,
+               "info": true,
+               "paging": true,
+               "order": [[0, 'asc']], // Sort by date ascending
+               "columnDefs": [
+                   { "orderable": false, "targets": nonSortableColumns }
+               ],
+               "autoWidth": false
+           });
+       });
 
-            // Edit button functionality
-            const editButtons = document.querySelectorAll('.editBtn');
-            const modal = new bootstrap.Modal(document.getElementById('supplierLedgerModal'));
-            const form = document.getElementById('supplierLedgerForm');
-            const submitBtn = document.getElementById('submitBtn');
-            const modalTitle = document.getElementById('supplierLedgerModalLabel');
-            const recordId = document.getElementById('record_id');
+       // Edit button functionality
+       $(document).on('click', '.editBtn', function() {
+           // Populate form with existing data
+           $('#date').val($(this).data('date'));
+           $('#supplier_name').val($(this).data('supplier_name'));
+           $('#reference_number').val($(this).data('ref_no'));
+           $('#description').val($(this).data('description'));
+           $('#credit').val($(this).data('credit'));
+           $('#debit').val($(this).data('debit'));
+           $('#creditDol').val($(this).data('creditdol'));
+           $('#debitDol').val($(this).data('debitdol'));
+           $('#remark').val($(this).data('remark'));
+           $('#record_id').val($(this).data('id'));
+           $('#TypeSelect').val($(this).data('typesel'));
 
-            editButtons.forEach(button => {
-                button.addEventListener('click', function() {
-                    // Populate form with existing data
-                    document.getElementById('date').value = this.dataset.date;
-                    document.getElementById('supplier_name').value = this.dataset.supplier_name;
-                    document.getElementById('reference_number').value = this.dataset.ref_no;
-                    document.getElementById('description').value = this.dataset.description;
-                    document.getElementById('credit').value = this.dataset.credit;
-                    document.getElementById('debit').value = this.dataset.debit;
-                    recordId.value = this.dataset.id;
+            // Trigger change event to show/hide appropriate fields
+            $('#TypeSelect').trigger('change');
 
-                    // Change modal title and button text
-                    modalTitle.textContent = 'Edit Ledger Record';
-                    submitBtn.textContent = 'Update';
-                    submitBtn.name = 'UpdateSupplierLedger';
+            // Change modal title and button text
+            $('#supplierLedgerModalLabel').text('Edit Ledger Record');
+            $('#submitBtn').text('Update').attr('name', 'UpdateSupplierLedger');
 
-                    // Show modal
-                    modal.show();
-                });
-            });
-
-            // Reset modal when hidden
-            document.getElementById('supplierLedgerModal').addEventListener('hidden.bs.modal', function() {
-                form.reset();
-                form.classList.remove('was-validated');
-                modalTitle.textContent = 'Add a Ledger Record';
-                submitBtn.textContent = 'Add';
-                submitBtn.name = 'SubmitSupplierLedger';
-                recordId.value = '';
-            });
-
-            // Re-initialize DataTables when tab changes (if needed)
-            $('#supplierTabs button').on('shown.bs.tab', function() {
-                $('.supplier-ledger-table').DataTable().columns.adjust().responsive.recalc();
-            });
+            // Show modal
+            $('#supplierLedgerModal').modal('show');
         });
-    </script>
+
+        // Reset modal when hidden
+        $('#supplierLedgerModal').on('hidden.bs.modal', function() {
+            $('#supplierLedgerForm')[0].reset();
+            $('#supplierLedgerForm').removeClass('was-validated');
+            $('#supplierLedgerModalLabel').text('Add a Ledger Record');
+            $('#submitBtn').text('Add').attr('name', 'SubmitSupplierLedger');
+            $('#record_id').val('');
+            $('#TypeSelect').val('').trigger('change');
+        });
+
+        // Adjust DataTable when tab changes
+        $('button[data-bs-toggle="tab"]').on('shown.bs.tab', function(e) {
+            let targetTable = $($(e.target).data('bs-target')).find('table');
+            if ($.fn.DataTable.isDataTable(targetTable)) {
+                targetTable.DataTable().columns.adjust().responsive.recalc();
+            }
+        });
+
+        // Handle delete confirmation with better URL handling
+        $(document).on('click', '.btn-danger', function(e) {
+            if (!confirm("Are you sure you want to delete this record?")) {
+                e.preventDefault();
+            }
+        });
+    });
+</script>
 </body>
 </html>
