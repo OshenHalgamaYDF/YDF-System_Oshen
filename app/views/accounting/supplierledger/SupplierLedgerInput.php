@@ -62,7 +62,33 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\supplierled
             <button class="btn btn-danger px-4" onclick="window.location.href='SupplierLedgerSummary.php'">
                 View Summary   
             </button>
+            <button class="btn btn-warning px-4" onclick="window.location.href='SupplierBankDetails.php'">
+                View Supplier Bank Details
+            </button>
         </div>
+
+        <div class="col-md-12">
+            <!-- Year filter -->
+            <form method="get" class="col-mb-12">
+                <?php
+                // Ensure $years has values
+                if (!empty($years)) {
+                    rsort($years); // Sort descending so latest year is first
+                }
+                // If a year is selected via GET, use it; otherwise use the latest year
+                $selected_year = isset($_GET['year']) ? $_GET['year'] : (isset($years[0]) ? $years[0] : date("Y"));
+                ?>
+                <label class="form-label fw-bold">Select a year</label>
+                <select name="year" class="form-select" onchange="this.form.submit()">
+                    <?php foreach ($years as $year): ?>
+                        <option value="<?php echo $year; ?>" <?php if ($year == $selected_year) echo "selected"; ?>>
+                            <?php echo $year; ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </form>
+        </div>
+
 
         <!-- Modal-->
         <div class="modal fade" id="supplierLedgerModal" tabindex="-1" aria-labelledby="supplierLedgerModalLabel" aria-hidden="true">
@@ -160,9 +186,13 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\supplierled
         <!-- Navbar-->
         <div class="container mt-4">
             <!-- Tables Navbar-->
-            <ul class="nav nav-underline" id="supplierTabs" role="tablist">
-                <?php if (count($suppliername) > 0): ?>
+            <?php if (count($suppliername) > 0): ?>
+                <ul class="nav nav-underline" id="supplierTabs" role="tablist">
                     <?php foreach ($suppliername as $index => $name): ?>
+                        <?php 
+                            $supplierRecords = $recordsBySupplier[$name] ?? [];
+                            if (count($supplierRecords) === 0) continue; // Skip tab if no records
+                        ?>
                         <li class="nav-item" role="presentation">
                             <button class="nav-link <?php echo $index === 0 ? 'active' : ''; ?>" 
                                     id="tab-<?php echo md5($name); ?>" 
@@ -171,190 +201,127 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\supplierled
                                     type="button" 
                                     role="tab">
                                 <?php echo htmlspecialchars($name); ?>
-                            </button>   
+                            </button>
                         </li>
                     <?php endforeach; ?>
-                <?php else: ?>
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link active" disabled>No suppliers available</button>
-                    </li>
-                <?php endif; ?>
-            </ul>
-            <!-- Table content-->
-            <div class="tab-content mt-2">
-                <?php if (count($suppliername) > 0): ?>
-                    <?php foreach ($suppliername as $index => $name): ?>
-                        <?php
-                        $supplierRecords = isset($recordsBySupplier[$name]) ? $recordsBySupplier[$name] : [];
-                        $hasLKR = false;
-                        $hasUSD = false;
-                        
-                        // Check what currencies exist for this supplier
+                </ul>
+
+                <div class="tab-content mt-2">
+                    <?php 
+                    $firstActive = true;
+                    foreach ($suppliername as $name):
+                        $supplierRecords = $recordsBySupplier[$name] ?? [];
+                        if (count($supplierRecords) === 0) continue; // Skip empty table
+
+                        // Check currencies
+                        $hasLKR = $hasUSD = false;
                         foreach ($supplierRecords as $row) {
-                            if ($row['credit(LKR)'] > 0 || $row['debit(LKR)'] > 0) {
-                                $hasLKR = true;
-                            }
-                            if (isset($row['credit($)']) && ($row['credit($)'] > 0 || (isset($row['debit($)']) && $row['debit($)'] > 0))) {
-                                $hasUSD = true;
-                            }
-                            // If we found both, no need to continue checking
+                            if ($row['credit(LKR)'] > 0 || $row['debit(LKR)'] > 0) $hasLKR = true;
+                            if (($row['credit($)'] ?? 0) > 0 || ($row['debit($)'] ?? 0) > 0) $hasUSD = true;
                             if ($hasLKR && $hasUSD) break;
                         }
-                        
-                        // Determine column structure
-                        $lkrColumns = 3; // Credit LKR, Debit LKR, Balance LKR
-                        $usdColumns = 3; // Credit USD, Debit USD, Balance USD
-                        $baseColumns = 4; // Date, Supplier, Ref No, Description
-                        $otherColumns = 2; // Remark, Actions
-                        
-                        $totalColumns = $baseColumns + $otherColumns;
-                        if ($hasLKR) $totalColumns += $lkrColumns;
-                        if ($hasUSD) $totalColumns += $usdColumns;
-                        ?>
-                        <div class="tab-pane fade <?php echo $index === 0 ? 'show active' : ''; ?>" 
-                             id="content-<?php echo md5($name); ?>" 
-                             role="tabpanel">
-                            <div class="table-responsive">
-                                <table class="table table-bordered table-striped supplier-ledger-table" id="table-<?php echo md5($name); ?>" data-has-lkr="<?php echo $hasLKR ? 'true' : 'false'; ?>" data-has-usd="<?php echo $hasUSD ? 'true' : 'false'; ?>">
-                                    <thead class="table-dark">
-                                        <tr>
-                                            <th>Date</th>
-                                            <th>Supplier Name</th>
-                                            <th>Reference Number</th>
-                                            <th>Description</th>
-                                            
-                                            <?php if ($hasLKR): ?>
-                                                <th>Credit (LKR)</th>
-                                                <th>Debit (LKR)</th>
-                                                <th>Balance (LKR)</th>
-                                            <?php endif; ?>
-                                            
-                                            <?php if ($hasUSD): ?>
-                                                <th>Credit ($)</th>
-                                                <th>Debit ($)</th>
-                                                <th>Balance ($)</th>
-                                            <?php endif; ?>
-                                            
-                                            <th>Remark</th>
-                                            <th>Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <?php
-                                        $balanceLKR = 0;
-                                        $balanceUSD = 0;
-                                        
-                                        if (count($supplierRecords) > 0) {
-                                            foreach ($supplierRecords as $row) {
-                                                $balanceLKR += ($row['credit(LKR)'] - $row['debit(LKR)']);
-                                                $creditUSD = isset($row['credit($)']) ? $row['credit($)'] : 0;
-                                                $debitUSD = isset($row['debit($)']) ? $row['debit($)'] : 0;
-                                                $balanceUSD += ($creditUSD - $debitUSD);
-                                                ?>
-                                                <tr>
-                                                    <td><?php echo htmlspecialchars($row['date']); ?></td>
-                                                    <td><?php echo htmlspecialchars($row['supplier_name']); ?></td>
-                                                    <td><?php echo htmlspecialchars($row['ref_no']); ?></td>
-                                                    <td><?php echo htmlspecialchars($row['description']); ?></td>
-                                                    
-                                                    <?php if ($hasLKR): ?>
-                                                        <td class="text-success"><?php echo number_format($row['credit(LKR)'], 2); ?></td>
-                                                        <td class="text-danger"><?php echo number_format($row['debit(LKR)'], 2); ?></td>
-                                                        <td class="fw-bold <?php echo $balanceLKR >= 0 ? 'text-success' : 'text-danger'; ?>">
-                                                            <?php echo number_format($balanceLKR, 2); ?>
-                                                        </td>
-                                                    <?php endif; ?>
-                                                    
-                                                    <?php if ($hasUSD): ?>
-                                                        <td class="text-success"><?php echo number_format($creditUSD, 2); ?></td>
-                                                        <td class="text-danger"><?php echo number_format($debitUSD, 2); ?></td>
-                                                        <td class="fw-bold <?php echo $balanceUSD >= 0 ? 'text-success' : 'text-danger'; ?>">
-                                                            <?php echo number_format($balanceUSD, 2); ?>
-                                                        </td>
-                                                    <?php endif; ?>
-                                                    
-                                                    <td><?php echo htmlspecialchars($row['remark'] ?? ''); ?></td>
-                                                    <td>
-                                                        <button class='btn btn-sm btn-warning editBtn' 
-                                                                data-id='<?php echo $row['id']; ?>' 
-                                                                data-date='<?php echo $row['date']; ?>' 
-                                                                data-supplier_name='<?php echo htmlspecialchars($row['supplier_name']); ?>' 
-                                                                data-ref_no='<?php echo htmlspecialchars($row['ref_no']); ?>' 
-                                                                data-description='<?php echo htmlspecialchars($row['description']); ?>' 
-                                                                data-credit='<?php echo $row['credit(LKR)']; ?>' 
-                                                                data-debit='<?php echo $row['debit(LKR)']; ?>'
-                                                                data-creditdol='<?php echo $creditUSD; ?>'
-                                                                data-debitdol='<?php echo $debitUSD; ?>'
-                                                                data-remark='<?php echo htmlspecialchars($row['remark'] ?? ''); ?>'
-                                                                data-typesel='<?php 
-                                                                    $hasLKRRecord = $row['credit(LKR)'] > 0 || $row['debit(LKR)'] > 0;
-                                                                    $hasUSDRecord = $creditUSD > 0 || $debitUSD > 0;
-                                                                    if ($hasLKRRecord && $hasUSDRecord) echo 'both';
-                                                                    elseif ($hasUSDRecord) echo 'Dollar';
-                                                                    else echo 'LKR';
-                                                                ?>'>
-                                                            <i class="fas fa-edit"></i>
-                                                        </button>
-                                                        <a href='?delete_id=<?php echo $row['id']; ?>' 
-                                                           class='btn btn-sm btn-danger' 
-                                                           onclick='return confirm("Are you sure you want to delete this record?")'>
-                                                            <i class="fas fa-trash"></i>
-                                                        </a>
-                                                    </td>
-                                                </tr>
-                                                <?php
-                                            } ?>
-                                    </tbody>
-                                    <tfoot>
-                                        <tr class="table-info">
-                                            <td colspan="6" class="fw-bold text-end">
-                                                Amount to be settled:
-                                            </td>
-                                            
-                                            <?php if ($hasLKR): ?>
-                                                <td class="fw-bold text-center <?php echo $balanceLKR >= 0 ? 'text-success' : 'text-danger'; ?>">
-                                                    LKR <?php echo number_format($balanceLKR, 2); ?>
-                                                </td>
-                                            <?php endif; ?>
-                                            
-                                            <?php if ($hasUSD): ?>
-                                                <td></td>
-                                                <td></td>
-                                                <td class="fw-bold text-center <?php echo $balanceUSD >= 0 ? 'text-success' : 'text-danger'; ?>">
-                                                    $ <?php echo number_format($balanceUSD, 2); ?>
-                                                </td>
-                                            <?php endif; ?>
-                                            
-                                            <td colspan="2"></td>
-                                        </tr>
-                                        
-                                        <?php if ($hasLKR && $hasUSD): ?>
-                                        <tr class="table-warning">
-                                            <td colspan="<?php echo $totalColumns; ?>" class="fw-bold text-center">
-                                                Total Payable: 
-                                                LKR <?php echo number_format($balanceLKR, 2); ?> | 
-                                                $ <?php echo number_format($balanceUSD, 2); ?>
-                                            </td>
-                                        </tr>
+
+                        $totalColumns = 4; // Date, Supplier, Ref, Desc
+                        if ($hasLKR) $totalColumns += 3;
+                        if ($hasUSD) $totalColumns += 3;
+                        $totalColumns += 2; // Remark + Actions
+                    ?>
+                    <div class="tab-pane fade <?php echo $firstActive ? 'show active' : ''; ?>" id="content-<?php echo md5($name); ?>" role="tabpanel">
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-striped supplier-ledger-table" id="table-<?php echo md5($name); ?>" data-has-lkr="<?php echo $hasLKR ? 'true' : 'false'; ?>" data-has-usd="<?php echo $hasUSD ? 'true' : 'false'; ?>">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Supplier Name</th>
+                                        <th>Reference Number</th>
+                                        <th>Description</th>
+                                        <?php if ($hasLKR): ?>
+                                            <th>Credit (LKR)</th>
+                                            <th>Debit (LKR)</th>
+                                            <th>Balance (LKR)</th>
                                         <?php endif; ?>
-                                    </tfoot>
-                                        <?php } else {
-                                            ?>
-                                            <tr>
-                                                <td colspan='<?php echo $totalColumns; ?>' class='text-center'>No records found for <?php echo htmlspecialchars($name); ?></td>
-                                            </tr>
-                                            <?php
-                                        }
-                                        ?>
-                                </table>
-                            </div>
+                                        <?php if ($hasUSD): ?>
+                                            <th>Credit ($)</th>
+                                            <th>Debit ($)</th>
+                                            <th>Balance ($)</th>
+                                        <?php endif; ?>
+                                        <th>Remark</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php
+                                    $balanceLKR = $balanceUSD = 0;
+                                    foreach ($supplierRecords as $row):
+                                        $balanceLKR += $row['credit(LKR)'] - $row['debit(LKR)'];
+                                        $creditUSD = $row['credit($)'] ?? 0;
+                                        $debitUSD = $row['debit($)'] ?? 0;
+                                        $balanceUSD += $creditUSD - $debitUSD;
+                                    ?>
+                                    <tr>
+                                        <td><?php echo htmlspecialchars($row['date']); ?></td>
+                                        <td><?php echo htmlspecialchars($row['supplier_name']); ?></td>
+                                        <td><?php echo htmlspecialchars($row['ref_no']); ?></td>
+                                        <td><?php echo htmlspecialchars($row['description']); ?></td>
+                                        <?php if ($hasLKR): ?>
+                                            <td class="text-success"><?php echo number_format($row['credit(LKR)'],2); ?></td>
+                                            <td class="text-danger"><?php echo number_format($row['debit(LKR)'],2); ?></td>
+                                            <td class="fw-bold <?php echo $balanceLKR >= 0 ? 'text-success' : 'text-danger'; ?>"><?php echo number_format($balanceLKR,2); ?></td>
+                                        <?php endif; ?>
+                                        <?php if ($hasUSD): ?>
+                                            <td class="text-success"><?php echo number_format($creditUSD,2); ?></td>
+                                            <td class="text-danger"><?php echo number_format($debitUSD,2); ?></td>
+                                            <td class="fw-bold <?php echo $balanceUSD >= 0 ? 'text-success' : 'text-danger'; ?>"><?php echo number_format($balanceUSD,2); ?></td>
+                                        <?php endif; ?>
+                                        <td><?php echo htmlspecialchars($row['remark'] ?? ''); ?></td>
+                                        <td>
+                                            <button class='btn btn-sm btn-warning editBtn' 
+                                                    data-id='<?php echo $row['id']; ?>' 
+                                                    data-date='<?php echo $row['date']; ?>' 
+                                                    data-supplier_name='<?php echo htmlspecialchars($row['supplier_name']); ?>' 
+                                                    data-ref_no='<?php echo htmlspecialchars($row['ref_no']); ?>' 
+                                                    data-description='<?php echo htmlspecialchars($row['description']); ?>' 
+                                                    data-credit='<?php echo $row['credit(LKR)']; ?>' 
+                                                    data-debit='<?php echo $row['debit(LKR)']; ?>'
+                                                    data-creditdol='<?php echo $creditUSD; ?>'
+                                                    data-debitdol='<?php echo $debitUSD; ?>'
+                                                    data-remark='<?php echo htmlspecialchars($row['remark'] ?? ''); ?>'
+                                                    data-typesel='<?php 
+                                                        $hasLKRRecord = $row['credit(LKR)'] > 0 || $row['debit(LKR)'] > 0;
+                                                        $hasUSDRecord = $creditUSD > 0 || $debitUSD > 0;
+                                                        if ($hasLKRRecord && $hasUSDRecord) echo 'both';
+                                                        elseif ($hasUSDRecord) echo 'Dollar';
+                                                        else echo 'LKR';
+                                                    ?>'>
+                                                <i class="fas fa-edit"></i>
+                                            </button>
+                                            <a href='?delete_id=<?php echo $row['id']; ?>' 
+                                               class='btn btn-sm btn-danger' 
+                                               onclick='return confirm("Are you sure you want to delete this record?")'>
+                                                <i class="fas fa-trash"></i>
+                                            </a>
+                                        </td>
+                                    </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                                <tfoot>
+                                    <tr class="table-info">
+                                        <td colspan="<?php echo $totalColumns; ?>" class="text-center fw-bold">
+                                            Total Balance: LKR <?php echo number_format($balanceLKR,2); ?> | $ <?php echo number_format($balanceUSD,2); ?>
+                                        </td>
+                                    </tr>
+                                </tfoot>
+                            </table>
                         </div>
-                    <?php endforeach; ?>
-                <?php else: ?>
-                    <div class="tab-pane fade show active">
-                        <div class="alert alert-info">No supplier data available. Add your first record using the button above.</div>
                     </div>
-                <?php endif; ?>
+                    <?php
+                    $firstActive = false;
+                    endforeach;
+                    ?>
+                </div>
+            <?php else: ?>
+                <div class="alert alert-info">No supplier data available. Add your first record using the button above.</div>
+            <?php endif; ?>
             </div>
         </div>
     </div>
