@@ -146,8 +146,19 @@ foreach ($allRecords as $record) {
 }
 
 // SLS php
+// Get current year and all distinct years from supplierledger
+$years = [];
+$result = $conn->query("SELECT DISTINCT YEAR(date) AS year FROM supplierledger ORDER BY year DESC");
+if ($result) {
+    while ($row = $result->fetch_assoc()) {
+        $years[] = $row['year'];
+    }
+}
+// Get selected year (default current year if none selected)
+$selected_year = isset($_GET['year']) ? intval($_GET['year']) : date('Y');
+
 $suppliersummary = []; // initialize
-$suppliersummarydata = $conn->query("
+$sql = "
     SELECT supplier_name,
            SUM(`credit(LKR)`) AS total_credit_lkr,
            SUM(`debit(LKR)`)  AS total_debit_lkr,
@@ -156,17 +167,25 @@ $suppliersummarydata = $conn->query("
            SUM(`debit($)`)    AS total_debit_usd,
            (SUM(`credit($)`) - SUM(`debit($)`)) AS balance_usd
     FROM supplierledger
+    WHERE YEAR(date) = $selected_year
     GROUP BY supplier_name
     ORDER BY supplier_name ASC
-");
+";
+$suppliersummarydata = $conn->query($sql);
 
 if ($suppliersummarydata){
+    $id = 1;
     while ($row = $suppliersummarydata->fetch_assoc()){
-        $suppliersummary[] = $row; // keep whole row
+        $row['id'] = $id;   
+        $suppliersummary[] = $row;
+        $id++;
     }
 }else{
     die("Error fetching suppliers: " . $conn->error);
 }
+
+$f_blanace_LKR = 0;
+$f_balance_dollar = 0;
 
 
 
