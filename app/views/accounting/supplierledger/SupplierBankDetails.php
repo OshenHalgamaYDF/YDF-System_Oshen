@@ -99,27 +99,27 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\supplierled
             <table id="supplierTable" class="table table-bordered table-striped table-hover">
                 <thead class="table-dark">
                     <tr>
-                        <th>ID</th>
-                        <th>Name</th>
-                        <th>Nick Name</th>
-                        <th>Bank Name and Branch</th>
-                        <th>Account No</th>
-                        <th>Swift code</th>
-                        <th>Remark</th>
-                        <th>Action</th>
+                        <th class="text-center align-middle">ID</th>
+                        <th class="text-center align-middle">Name</th>
+                        <th class="text-center align-middle">Nick Name</th>
+                        <th class="text-center align-middle">Bank Name and Branch</th>
+                        <th class="text-center align-middle">Account No</th>
+                        <th class="text-center align-middle">Swift code</th>
+                        <th class="text-center align-middle">Remark</th>
+                        <th class="text-center align-middle">Action</th>
                     </tr>
                 </thead>
                 <tbody>
                     <?php foreach ($supplierdetails as $row): ?>
                         <tr>
-                            <td><?php echo htmlspecialchars($row['id']); ?></td>
-                            <td><?php echo htmlspecialchars($row['name']); ?></td>
-                            <td><?php echo htmlspecialchars($row['nickname']); ?></td>
-                            <td><?php echo htmlspecialchars($row['bankname_branch']); ?></td>
-                            <td><?php echo htmlspecialchars($row['acc_no']); ?></td>
-                            <td><?php echo htmlspecialchars($row['swift_code']); ?></td>
-                            <td><?php echo htmlspecialchars($row['remark']); ?></td>
-                            <td>
+                            <td class="text-center align-middle"><?php echo htmlspecialchars($row['id']); ?></td>
+                            <td class="text-center align-middle"><?php echo htmlspecialchars($row['name']); ?></td>
+                            <td class="text-center align-middle"><?php echo htmlspecialchars($row['nickname']); ?></td>
+                            <td class="text-center align-middle"><?php echo htmlspecialchars($row['bankname_branch']); ?></td>
+                            <td class="text-center align-middle"><?php echo htmlspecialchars($row['acc_no']); ?></td>
+                            <td class="text-center align-middle"><?php echo htmlspecialchars($row['swift_code']); ?></td>
+                            <td class="text-center align-middle"><?php echo htmlspecialchars($row['remark']); ?></td>
+                            <td class="text-center align-middle">
                                 <button class="btn btn-sm btn-warning editBtn"
                                     data-id="<?= $row['id'] ?>"
                                     data-name="<?= htmlspecialchars($row['name']) ?>"
