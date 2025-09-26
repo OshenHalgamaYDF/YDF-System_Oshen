@@ -11,23 +11,35 @@ if (mysqli_connect_errno()) {
     die("Connection failed: " . mysqli_connect_error());
 }
 
-// --- Year filter setup ---
+// Fetch distinct years once
 $years = [];
-$selected_year_before_balance = date("Y"); // default current year
-
-// Fetch distinct years from your table
 $yearResult = $conn->query("SELECT DISTINCT YEAR(date) as yr FROM supplierledger ORDER BY yr DESC");
 if ($yearResult) {
     while ($row = $yearResult->fetch_assoc()) {
-        $years[] = $row['yr'];
+        $years[] = intval($row['yr']);
     }
 }
 
-// If user selected a year
-if (isset($_GET['year']) && in_array($_GET['year'], $years)) {
-    $selected_year_before_balance = $_GET['year'];
-}
+// Determine selected year
+$selected_year = isset($_GET['year']) && in_array(intval($_GET['year']), $years) 
+                 ? intval($_GET['year']) 
+                 : (isset($years[0]) ? intval($years[0]) : date("Y"));
 
+// Use $selected_year for all queries
+$stmt = $conn->prepare("SELECT * FROM supplierledger WHERE YEAR(date) = ? ORDER BY date ASC, supplier_name ASC");
+$stmt->bind_param("i", $selected_year);
+$stmt->execute();
+$result = $stmt->get_result();
+
+// Group records by supplier
+$allRecords = [];
+while ($row = $result->fetch_assoc()) {
+    $allRecords[] = $row;
+}
+$recordsBySupplier = [];
+foreach ($allRecords as $record) {
+    $recordsBySupplier[$record['supplier_name']][] = $record;
+}
 
 // Handle DELETE operation first
 if (isset($_GET['delete_id'])) {
@@ -138,20 +150,6 @@ if ($supplierDDcollection){
     }
 }else{
     die("Error fetching suppliers: " . $conn->error);
-}
-
-$allRecords = [];
-$stmt = $conn->prepare("SELECT * FROM supplierledger WHERE YEAR(date) = ? ORDER BY date ASC, supplier_name ASC");
-$stmt->bind_param("i", $selected_year_before_balance);
-$stmt->execute();
-$result = $stmt->get_result();
-
-if ($result) {
-    while ($row = $result->fetch_assoc()) {
-        $allRecords[] = $row;
-    }
-} else {
-    die("Error fetching records: " . $conn->error);
 }
 
 // Group records by supplier for the tabs
