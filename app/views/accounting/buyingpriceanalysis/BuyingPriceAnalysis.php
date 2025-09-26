@@ -23,7 +23,10 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\buyingprice
 
     <!-- Font Awesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
+
+    <!--chart.js-->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
     <style>
         .nav-underline .nav-link.active {
             font-weight: bold;
@@ -225,14 +228,7 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\buyingprice
                 </button>
             </li>
         </ul>
-        <!--Graph Tab Content-->
-        <div class="tab-content mt-2">
-            <div class="tab-pane fade" id="content-statistics" role="tabpanel">
-                <div class="alert alert-info text-center">
-                    Statistics Graph feature is under development.
-                </div>
-            </div>
-        </div>
+
         <!-- Tab Content -->
         <div class="tab-content mt-2">
             <?php if (count($dateselected) > 0): ?>
@@ -368,6 +364,124 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\buyingprice
             <?php endif; ?>
             </div>
 
+        <!-- Average Calculation Tab -->
+        <div class="tab-content mt-2">
+            <div class="tab-pane fade" id="content-average" role="tabpanel">
+                <div class="table-responsive">
+                    <h4><b>Average Calculation for <?php echo date('F Y', strtotime($selectedMonth . '-01')); ?></b></h4>
+                    <table class="table table-striped table-hover text-center align-middle table-bordered" id="averageTable">
+                        <thead class="table-primary table-dark">
+                            <tr>
+                                <th rowspan="2" class="text-center align-middle">Product Code</th>
+                                <th rowspan="2" class="text-center align-middle">Product Name</th>
+                                <th rowspan="2" class="text-center align-middle">Size Range</th>
+                                <th rowspan="2" class="text-center align-middle">Target Price</th>
+                                <th colspan="<?php 
+                                    // Get all buyers for the selected month
+                                    $buyers = [];
+                                    $buyerSql = "SELECT DISTINCT buyer_name 
+                                                FROM buyingpriceanlaysistable 
+                                                WHERE DATE_FORMAT(date, '%Y-%m') = '$selectedMonth'
+                                                ORDER BY buyer_name";
+                                    $buyerRes = $conn->query($buyerSql);
+                                    if ($buyerRes && $buyerRes->num_rows > 0) {
+                                        while ($buyerRow = $buyerRes->fetch_assoc()) {
+                                            $buyers[] = $buyerRow['buyer_name'];
+                                        }
+                                    }
+                                    echo count($buyers);
+                                ?>" class="text-center align-middle">Buyer Average</th>
+                                <th rowspan="2" class="text-center align-middle">Overall Average</th>
+                            </tr>
+                            <tr>
+                                <?php foreach ($buyers as $buyer): ?>
+                                    <th class="text-center align-middle"><?= htmlspecialchars($buyer) ?></th>
+                                <?php endforeach; ?>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php
+                            // Get distinct products for the selected month
+                            $productSql = "SELECT DISTINCT product_code, product_name, size_range, target_price
+                                        FROM buyingpriceanlaysistable 
+                                        WHERE DATE_FORMAT(date, '%Y-%m') = '$selectedMonth'
+                                        ORDER BY product_code";
+                            $productResult = $conn->query($productSql);
+
+                            if ($productResult && $productResult->num_rows > 0) {
+                                while ($product = $productResult->fetch_assoc()) {
+                                    $productCode = $product['product_code'];
+                                    $productName = $product['product_name'];
+                                    $sizeRange = $product['size_range'];
+                                    $targetPrice = $product['target_price'];
+                                    
+                                    // Initialize variables for calculating overall average
+                                    $buyerAverages = [];
+                                    $buyerCount = 0;
+                                    $buyerSum = 0;
+                                    ?>
+                                    <tr class='text-center'>
+                                        <td><?= htmlspecialchars($productCode) ?></td>
+                                        <td><?= htmlspecialchars($productName) ?></td>
+                                        <td><?= htmlspecialchars($sizeRange) ?></td>
+                                        <td><?= number_format($targetPrice, 2) ?></td>
+                                        
+                                        <?php
+                                        // Display average for each buyer and collect for overall average
+                                        foreach ($buyers as $buyer) {
+                                            $buyerAvgSql = "SELECT AVG(sold_price) AS buyer_avg 
+                                                        FROM buyingpriceanlaysistable 
+                                                        WHERE product_code = '$productCode' 
+                                                        AND buyer_name = '" . $conn->real_escape_string($buyer) . "'
+                                                        AND DATE_FORMAT(date, '%Y-%m') = '$selectedMonth'";
+                                            $buyerAvgRes = $conn->query($buyerAvgSql);
+                                            
+                                            if ($buyerAvgRes && $buyerAvgRow = $buyerAvgRes->fetch_assoc()) {
+                                                $buyerAvg = $buyerAvgRow['buyer_avg'];
+                                                if ($buyerAvg !== null) {
+                                                    $buyerAverages[$buyer] = $buyerAvg;
+                                                    $buyerSum += $buyerAvg;
+                                                    $buyerCount++;
+                                                    echo "<td>" . number_format($buyerAvg, 2) . "</td>";
+                                                } else {
+                                                    $buyerAverages[$buyer] = null;
+                                                    echo "<td>-</td>";
+                                                }
+                                            } else {
+                                                $buyerAverages[$buyer] = null;
+                                                echo "<td>-</td>";
+                                            }
+                                        }
+                                        
+                                        // Calculate overall average as the average of buyer averages
+                                        $overallAvg = ($buyerCount > 0) ? $buyerSum / $buyerCount : 0;
+                                        ?>
+                                        
+                                        <td><?= number_format($overallAvg, 2) ?></td>
+                                    </tr>
+                                <?php }
+                            } else { ?>
+                                <tr>
+                                    <td colspan="<?php echo 5 + count($buyers); ?>" class='text-center'>
+                                        No records found for selected month
+                                    </td>
+                                </tr>
+                            <?php } ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!--Graph Tab Content-->
+        <div class="tab-content mt-2">
+            <div class="tab-pane fade" id="content-statistics" role="tabpanel">
+                <div class="alert alert-info text-center">
+                    Statistics Graph feature is under development.
+                </div>
+            </div>
+        </div>
+
         <!-- Edit Selection Modal -->
         <div class="modal fade" id="editModal" tabindex="-1" aria-hidden="true">
             <div class="modal-dialog">
@@ -491,115 +605,6 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\buyingprice
                             </div>
                         </form>
                     </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Average Calculation Tab -->
-        <div class="tab-average mt-2">
-            <div class="tab-pane fade" id="content-average" role="tabpanel">
-                <div class="table-responsive">
-                    <h4><b>Average Calculation for <?php echo date('F Y', strtotime($selectedMonth . '-01')); ?></b></h4>
-                    <table class="table table-striped table-hover text-center align-middle table-bordered" id="averageTable">
-                        <thead class="table-primary table-dark">
-                            <tr>
-                                <th rowspan="2" class="text-center align-middle">Product Code</th>
-                                <th rowspan="2" class="text-center align-middle">Product Name</th>
-                                <th rowspan="2" class="text-center align-middle">Size Range</th>
-                                <th rowspan="2" class="text-center align-middle">Target Price</th>
-                                <th colspan="<?php 
-                                    // Get all buyers for the selected month
-                                    $buyers = [];
-                                    $buyerSql = "SELECT DISTINCT buyer_name 
-                                                FROM buyingpriceanlaysistable 
-                                                WHERE DATE_FORMAT(date, '%Y-%m') = '$selectedMonth'
-                                                ORDER BY buyer_name";
-                                    $buyerRes = $conn->query($buyerSql);
-                                    if ($buyerRes && $buyerRes->num_rows > 0) {
-                                        while ($buyerRow = $buyerRes->fetch_assoc()) {
-                                            $buyers[] = $buyerRow['buyer_name'];
-                                        }
-                                    }
-                                    echo count($buyers);
-                                ?>" class="text-center align-middle">Buyer Average</th>
-                                <th rowspan="2" class="text-center align-middle">Overall Average</th>
-                            </tr>
-                            <tr>
-                                <?php foreach ($buyers as $buyer): ?>
-                                    <th class="text-center align-middle"><?= htmlspecialchars($buyer) ?></th>
-                                <?php endforeach; ?>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php
-                            // Get distinct products for the selected month
-                            $productSql = "SELECT DISTINCT product_code, product_name, size_range, target_price
-                                        FROM buyingpriceanlaysistable 
-                                        WHERE DATE_FORMAT(date, '%Y-%m') = '$selectedMonth'
-                                        ORDER BY product_code";
-                            $productResult = $conn->query($productSql);
-
-                            if ($productResult && $productResult->num_rows > 0) {
-                                while ($product = $productResult->fetch_assoc()) {
-                                    $productCode = $product['product_code'];
-                                    $productName = $product['product_name'];
-                                    $sizeRange = $product['size_range'];
-                                    $targetPrice = $product['target_price'];
-                                    
-                                    // Initialize variables for calculating overall average
-                                    $buyerAverages = [];
-                                    $buyerCount = 0;
-                                    $buyerSum = 0;
-                                    ?>
-                                    <tr class='text-center'>
-                                        <td><?= htmlspecialchars($productCode) ?></td>
-                                        <td><?= htmlspecialchars($productName) ?></td>
-                                        <td><?= htmlspecialchars($sizeRange) ?></td>
-                                        <td><?= number_format($targetPrice, 2) ?></td>
-                                        
-                                        <?php
-                                        // Display average for each buyer and collect for overall average
-                                        foreach ($buyers as $buyer) {
-                                            $buyerAvgSql = "SELECT AVG(sold_price) AS buyer_avg 
-                                                        FROM buyingpriceanlaysistable 
-                                                        WHERE product_code = '$productCode' 
-                                                        AND buyer_name = '" . $conn->real_escape_string($buyer) . "'
-                                                        AND DATE_FORMAT(date, '%Y-%m') = '$selectedMonth'";
-                                            $buyerAvgRes = $conn->query($buyerAvgSql);
-                                            
-                                            if ($buyerAvgRes && $buyerAvgRow = $buyerAvgRes->fetch_assoc()) {
-                                                $buyerAvg = $buyerAvgRow['buyer_avg'];
-                                                if ($buyerAvg !== null) {
-                                                    $buyerAverages[$buyer] = $buyerAvg;
-                                                    $buyerSum += $buyerAvg;
-                                                    $buyerCount++;
-                                                    echo "<td>" . number_format($buyerAvg, 2) . "</td>";
-                                                } else {
-                                                    $buyerAverages[$buyer] = null;
-                                                    echo "<td>-</td>";
-                                                }
-                                            } else {
-                                                $buyerAverages[$buyer] = null;
-                                                echo "<td>-</td>";
-                                            }
-                                        }
-                                        
-                                        // Calculate overall average as the average of buyer averages
-                                        $overallAvg = ($buyerCount > 0) ? $buyerSum / $buyerCount : 0;
-                                        ?>
-                                        
-                                        <td><?= number_format($overallAvg, 2) ?></td>
-                                    </tr>
-                                <?php }
-                            } else { ?>
-                                <tr>
-                                    <td colspan="<?php echo 5 + count($buyers); ?>" class='text-center'>
-                                        No records found for selected month
-                                    </td>
-                                </tr>
-                            <?php } ?>
-                        </tbody>
-                    </table>
                 </div>
             </div>
         </div>
