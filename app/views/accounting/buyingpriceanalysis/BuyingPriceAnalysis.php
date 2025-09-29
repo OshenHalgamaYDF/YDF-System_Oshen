@@ -1,5 +1,30 @@
 <?php
 include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\buyingpriceanalysis\BuyingPriceAnalysisController.php');
+
+if (isset($_GET['get_daily_avg']) && isset($_GET['product_code']) && isset($_GET['size_range']) && isset($_GET['month'])) {
+    $productCode = $conn->real_escape_string($_GET['product_code']);
+    $sizeRange = $conn->real_escape_string($_GET['size_range']);
+    $month = $conn->real_escape_string($_GET['month']);
+    $data = [];
+    $sql = "SELECT date, AVG(sold_price) as avg_price
+            FROM buyingpriceanlaysistable
+            WHERE product_code = '$productCode'
+              AND size_range = '$sizeRange'
+              AND DATE_FORMAT(date, '%Y-%m') = '$month'
+            GROUP BY date
+            ORDER BY date ASC";
+    $result = $conn->query($sql);
+    while ($row = $result->fetch_assoc()) {
+        $data[] = [
+            'date' => $row['date'],
+            'avg_price' => round($row['avg_price'], 2)
+        ];
+    }
+    header('Content-Type: application/json');
+    echo json_encode($data);
+    exit();
+}
+
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -24,6 +49,9 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\buyingprice
     <!-- Font Awesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
+    <!-- Chart.js for charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
     <style>
         .nav-underline .nav-link.active {
             font-weight: bold;
@@ -49,6 +77,10 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\buyingprice
         .month-filter-label {
             margin-right: 10px;
             font-weight: bold;
+        }
+        #averageTable th, #averageTable td {
+            min-width: 120px;
+            text-align: center;
         }
     </style>
 </head>
@@ -228,9 +260,19 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\buyingprice
         <!--Graph Tab Content-->
         <div class="tab-content mt-2">
             <div class="tab-pane fade" id="content-statistics" role="tabpanel">
-                <div class="alert alert-info text-center">
-                    Statistics Graph feature is under development.
+                <div class="mb-3">
+                    <label for="graphProductSelect" class="form-label">Select Product:</label>
+                        <select id="graphProductSelect" class="form-select w-auto">
+                            <option value="">Select Product</option>
+                            <?php foreach ($products as $product): ?>
+                                <option value="<?= htmlspecialchars($product['product_code']) ?>|<?= htmlspecialchars($product['size_range']) ?>">
+                                    <?= htmlspecialchars($product['product_name']) ?> (<?= htmlspecialchars($product['size_range']) ?>)
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
                 </div>
+                <canvas id="dailyAverageChart" height="100"></canvas>
+                <div id="graphNoData" class="text-center text-muted mt-3" style="display:none;"></div>
             </div>
         </div>
         <!-- Tab Content -->
@@ -301,10 +343,11 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\buyingprice
                                             $buyerPrices = [];
                                             foreach ($buyers as $buyer) {
                                                 $sql2 = "SELECT id, sold_price FROM buyingpriceanlaysistable 
-                                                        WHERE date = '$dateResult' 
-                                                        AND product_code = '".$product['product_code']."' 
-                                                        AND buyer_name = '".$conn->real_escape_string($buyer)."' 
-                                                        LIMIT 1";
+                                                         WHERE date = '$dateResult' 
+                                                         AND product_code = '".$product['product_code']."' 
+                                                         AND size_range = '".$product['size_range']."' 
+                                                         AND buyer_name = '".$conn->real_escape_string($buyer)."' 
+                                                         LIMIT 1";
                                                 $res2 = $conn->query($sql2);
                                                 if ($res2 && $row2 = $res2->fetch_assoc()) {?>
                                                     <td class="record-data" 
@@ -496,11 +539,11 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\buyingprice
         </div>
 
         <!-- Average Calculation Tab -->
-        <div class="tab-average mt-2">
+        <div class="tab-content mt-2">
             <div class="tab-pane fade" id="content-average" role="tabpanel">
                 <div class="table-responsive">
                     <h4><b>Average Calculation for <?php echo date('F Y', strtotime($selectedMonth . '-01')); ?></b></h4>
-                    <table class="table table-striped table-hover text-center align-middle table-bordered" id="averageTable">
+                    <table class="table table-striped table-hover text-center align-middle table-bordered w-100" id="averageTable">
                         <thead class="table-primary table-dark">
                             <tr>
                                 <th rowspan="2" class="text-center align-middle">Product Code</th>
@@ -561,10 +604,11 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\buyingprice
                                         // Display average for each buyer and collect for overall average
                                         foreach ($buyers as $buyer) {
                                             $buyerAvgSql = "SELECT AVG(sold_price) AS buyer_avg 
-                                                        FROM buyingpriceanlaysistable 
-                                                        WHERE product_code = '$productCode' 
-                                                        AND buyer_name = '" . $conn->real_escape_string($buyer) . "'
-                                                        AND DATE_FORMAT(date, '%Y-%m') = '$selectedMonth'";
+                                                            FROM buyingpriceanlaysistable 
+                                                            WHERE product_code = '$productCode' 
+                                                            AND size_range = '$sizeRange'
+                                                            AND buyer_name = '" . $conn->real_escape_string($buyer) . "'
+                                                            AND DATE_FORMAT(date, '%Y-%m') = '$selectedMonth'";
                                             $buyerAvgRes = $conn->query($buyerAvgSql);
                                             
                                             if ($buyerAvgRes && $buyerAvgRow = $buyerAvgRes->fetch_assoc()) {
@@ -767,6 +811,72 @@ $('#deleteBtn').click(function() {
         }
     }
 });
+
+let dailyAverageChart = null;
+
+function loadDailyAverageChart() {
+    const selectValue = document.getElementById('graphProductSelect').value;
+    const month = document.getElementById('monthFilter').value;
+    const noDataDiv = document.getElementById('graphNoData');
+    if (!selectValue || !month) {
+        if (dailyAverageChart) dailyAverageChart.destroy();
+        noDataDiv.style.display = 'block';
+        noDataDiv.textContent = 'Please select a product and month.';
+        return;
+    }
+
+    // Split value into product_code and size_range
+    const [productCode, sizeRange] = selectValue.split('|');
+
+    fetch(`BuyingPriceAnalysis.php?get_daily_avg=1&product_code=${encodeURIComponent(productCode)}&size_range=${encodeURIComponent(sizeRange)}&month=${encodeURIComponent(month)}`)
+        .then(res => res.json())
+        .then(data => {
+            const labels = data.map(item => item.date);
+            const prices = data.map(item => item.avg_price);
+
+            const ctx = document.getElementById('dailyAverageChart').getContext('2d');
+            if (dailyAverageChart) dailyAverageChart.destroy();
+
+            if (labels.length === 0) {
+                noDataDiv.style.display = 'block';
+                noDataDiv.textContent = 'No data available for this product and month.';
+                return;
+            } else {
+                noDataDiv.style.display = 'none';
+            }
+
+            dailyAverageChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Daily Average Price',
+                        data: prices,
+                        borderColor: 'rgba(75,192,192,1)',
+                        backgroundColor: 'rgba(75,192,192,0.2)',
+                        fill: true,
+                        tension: 0.3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { display: true }
+                    },
+                    scales: {
+                        y: { beginAtZero: false, title: { display: true, text: 'Average Price (LKR)' } },
+                        x: { title: { display: true, text: 'Date' } }
+                    }
+                }
+            });
+        });
+}
+
+document.getElementById('graphProductSelect').addEventListener('change', loadDailyAverageChart);
+document.getElementById('monthFilter').addEventListener('change', loadDailyAverageChart);
+
+// Optionally, load chart on tab show
+document.getElementById('tab-statistics').addEventListener('shown.bs.tab', loadDailyAverageChart);
 </script>
 </body>
 </html>

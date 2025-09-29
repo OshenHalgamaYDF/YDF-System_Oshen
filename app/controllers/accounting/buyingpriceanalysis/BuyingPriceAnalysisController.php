@@ -249,14 +249,30 @@ if ($monthResult && $monthResult->num_rows > 0) {
 
 // NEW: Fetch products for summary - Get distinct products from buying price analysis table
 $summaryProducts = [];
-$productSql = "SELECT DISTINCT product_code, product_name, scientific_name 
+$productSql = "SELECT DISTINCT product_code, product_name, scientific_name, size_range
                FROM buyingpriceanlaysistable 
                WHERE YEAR(date) = $selectedYear
-               ORDER BY product_name";
+               ORDER BY product_code, size_range";
 $productResult = $conn->query($productSql);
 if ($productResult && $productResult->num_rows > 0) {
     while ($productRow = $productResult->fetch_assoc()) {
         $summaryProducts[] = $productRow;
     }
 }
+
+// NEW: Fetch detailed data for the selected date
+$dateResult = $_GET['date'] ?? date('Y-m-d');
+$detailedData = [];
+$sql = "SELECT product_code, product_name, scientific_name, specification, size_range, target_price, 
+        GROUP_CONCAT(DISTINCT CONCAT(buyer_name, ': ', remark) SEPARATOR ', ') AS remarks
+        FROM buyingpriceanlaysistable
+        WHERE date = '$dateResult'
+        GROUP BY product_code, product_name, scientific_name, specification, size_range, target_price";
+$stmt = $conn->prepare($sql);
+$stmt->execute();
+$result = $stmt->get_result();
+while ($row = $result->fetch_assoc()) {
+    $detailedData[] = $row;
+}
+$stmt->close();
 ?>

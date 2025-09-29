@@ -73,6 +73,7 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\buyingprice
                 <tr>
                     <th rowspan="2" class="text-center align-middle">Product Code</th>
                     <th rowspan="2" class="text-center align-middle">Product Name</th>
+                    <th rowspan="2" class="text-center align-middle">Size Range</th>
                     <th rowspan="2" class="text-center align-middle">Scientific Name</th>
                     <?php if (!empty($months)): ?>
                         <th colspan="<?php echo count($months); ?>" class="text-center align-middle">Monthly Average Prices (<?php echo $selectedYear; ?>)</th>
@@ -101,11 +102,13 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\buyingprice
                         $productCode = $product['product_code'];
                         $productName = $product['product_name'];
                         $scientificName = $product['scientific_name'];
+                        $sizeRange = $product['size_range'];
                         
                         echo "<tr>
                                 <td>{$productCode}</td>
                                 <td>{$productName}</td>
-                                <td>{$scientificName}</td>";
+                                <td>{$scientificName}</td>
+                                <td>{$sizeRange}</td>";
                         
                         $monthlyAverages = [];
                         $totalAverage = 0;
@@ -118,10 +121,11 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\buyingprice
                                 
                                 // FIXED: Remove STR_TO_DATE since date is already in proper format
                                 $avgSql = "SELECT AVG(sold_price) as avg_price 
-                                          FROM buyingpriceanlaysistable 
-                                          WHERE product_code = '{$productCode}' 
-                                          AND DATE_FORMAT(date, '%Y-%m') = '{$monthCode}'
-                                          AND YEAR(date) = $selectedYear";
+                                           FROM buyingpriceanlaysistable 
+                                           WHERE product_code = '{$productCode}' 
+                                           AND size_range = '{$sizeRange}'
+                                           AND DATE_FORMAT(date, '%Y-%m') = '{$monthCode}'
+                                           AND YEAR(date) = $selectedYear";
                                 
                                 $avgResult = $conn->query($avgSql);
                                 $avgPrice = 0;
