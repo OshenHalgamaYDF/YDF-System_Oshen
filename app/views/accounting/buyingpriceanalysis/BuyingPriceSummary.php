@@ -55,7 +55,7 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\buyingprice
                         </span>
                         <span class="ms-3 text-muted">
                             <i class="fas fa-boxes me-1"></i>
-                            <?php echo count($products); ?> product(s)
+                            <?php echo count($summaryProducts); ?> product(s)
                         </span>
                         <?php if (!empty($months)): ?>
                             <span class="ms-3 text-muted">
@@ -96,8 +96,8 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\buyingprice
             </thead>
             <tbody>
                 <?php 
-                if (!empty($products)) {
-                    foreach ($products as $product) {
+                if (!empty($summaryProducts)) {
+                    foreach ($summaryProducts as $product) {
                         $productCode = $product['product_code'];
                         $productName = $product['product_name'];
                         $scientificName = $product['scientific_name'];
@@ -116,11 +116,12 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\buyingprice
                             foreach ($months as $month) {
                                 $monthCode = $month['month_code'];
                                 
+                                // FIXED: Remove STR_TO_DATE since date is already in proper format
                                 $avgSql = "SELECT AVG(sold_price) as avg_price 
                                           FROM buyingpriceanlaysistable 
                                           WHERE product_code = '{$productCode}' 
-                                          AND DATE_FORMAT(STR_TO_DATE(date, '%Y-%m-%d'), '%Y-%m') = '{$monthCode}'
-                                          AND YEAR(STR_TO_DATE(date, '%Y-%m-%d')) = $selectedYear";
+                                          AND DATE_FORMAT(date, '%Y-%m') = '{$monthCode}'
+                                          AND YEAR(date) = $selectedYear";
                                 
                                 $avgResult = $conn->query($avgSql);
                                 $avgPrice = 0;
@@ -148,7 +149,7 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\buyingprice
                     }
                 } else {
                     $colspan = !empty($months) ? count($months) + 4 : 5;
-                    echo "<tr><td colspan='{$colspan}' class='text-center'>No products found</td></tr>";
+                    echo "<tr><td colspan='{$colspan}' class='text-center'>No products found for selected year</td></tr>";
                 }
                 ?>
             </tbody>

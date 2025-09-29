@@ -104,14 +104,14 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\buyingprice
                                 <option value="">Select Product</option>
                                 <?php foreach ($products as $product): ?>
                                     <option
-                                        value="<?php echo htmlspecialchars($product['product_name']); ?>"
-                                        data-product-code="<?php echo htmlspecialchars($product['product_code']); ?>"
-                                        data-scientific-name="<?php echo htmlspecialchars($product['scientific_name']); ?>"
-                                        data-size-range="<?php echo htmlspecialchars($product['size_range']); ?>"
-                                        data-specification="<?php echo htmlspecialchars($product['specification']); ?>"
-                                        data-target-price="<?php echo htmlspecialchars($product['target_buying_price']); ?>"
+                                        value="<?= htmlspecialchars($product['product_name'] ?? '') ?>"
+                                        data-product-code="<?= htmlspecialchars($product['product_code'] ?? '') ?>"
+                                        data-scientific-name="<?= htmlspecialchars($product['scientific_name'] ?? '') ?>"
+                                        data-size-range="<?= htmlspecialchars($product['size_range'] ?? '') ?>"
+                                        data-specification="<?= htmlspecialchars($product['specification'] ?? '') ?>"
+                                        data-target-price="<?= htmlspecialchars($product['target_buying_price'] ?? '') ?>"
                                     >
-                                        <?php echo htmlspecialchars($product['product_name']); ?>
+                                        <?= htmlspecialchars($product['product_name'] ?? 'Unknown Product') ?>
                                     </option>
                                 <?php endforeach; ?>
                             </select>

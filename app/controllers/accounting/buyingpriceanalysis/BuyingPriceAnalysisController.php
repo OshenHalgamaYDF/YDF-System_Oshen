@@ -5,11 +5,15 @@ $password   = "";
 $database   = "ydf-system";
 
 $conn = new mysqli($servername, $username, $password, $database);
-
 if ($conn->connect_error) {
     die("Connection failed: " . $conn->connect_error);
 }
 
+/**
+ * --------------------------
+ * Insert / Update (SubmitOffel)
+ * --------------------------
+ */
 if (isset($_POST['SubmitOffel'])) {
     $product_code    = $_POST['product_code'];
     $date            = $_POST['date'];
@@ -21,7 +25,7 @@ if (isset($_POST['SubmitOffel'])) {
     $buyer_name      = $_POST['buyer_name'];
     $sold_price      = $_POST['sold_price'];
     $remark          = $_POST['remark'];
-    
+
     // Check if record already exists
     $checkSql = "SELECT 1 FROM buyingpriceanlaysistable 
                  WHERE date=? AND product_code=? AND buyer_name=? LIMIT 1";
@@ -77,11 +81,14 @@ if (isset($_POST['SubmitOffel'])) {
     } else {
         echo "Error: " . $stmt->error;
     }
-
     $stmt->close();
 }
 
-// Handle update from edit modal
+/**
+ * --------------------------
+ * Update from Edit Modal
+ * --------------------------
+ */
 if (isset($_POST['UpdateRecord'])) {
     $record_id       = $_POST['record_id'];
     $product_code    = $_POST['product_code'];
@@ -94,12 +101,11 @@ if (isset($_POST['UpdateRecord'])) {
     $buyer_name      = $_POST['buyer_name'];
     $sold_price      = $_POST['sold_price'];
     $remark          = $_POST['remark'];
-    
+
     $sql = "UPDATE buyingpriceanlaysistable 
             SET product_code=?, date=?, product_name=?, scientific_name=?, size_range=?, specification=?, 
-            target_price=?, buyer_name=?, sold_price=?, remark=?
+                target_price=?, buyer_name=?, sold_price=?, remark=?
             WHERE id=?";
-    
     $stmt = $conn->prepare($sql);
     $stmt->bind_param(
         "ssssssdsssi",
@@ -115,59 +121,64 @@ if (isset($_POST['UpdateRecord'])) {
         $remark,
         $record_id
     );
-    
+
     if ($stmt->execute()) {
         header("Location: BuyingPriceAnalysis.php");
         exit();
     } else {
         echo "Error: " . $stmt->error;
     }
-    
     $stmt->close();
 }
 
-// Fetch products for dropdown
+/**
+ * --------------------------
+ * Fetch products (for dropdown)
+ * --------------------------
+ */
 $products = [];
 $result = $conn->query("
-SELECT p.*, tbp.*
-FROM target_buying_price tbp
-JOIN products p ON tbp.product_id = p.id
+    SELECT product_name, product_code, scientific_name, size_range, specification, target_buying_price
+    FROM target_buying_price tbp
+    JOIN products p ON tbp.product_id = p.id
 ");
-
 if ($result && $result->num_rows > 0) {
     while ($row = $result->fetch_assoc()) {
-        $products[] = $row;
+        $products[] = [
+            'product_name'        => $row['product_name'] ?? '',
+            'product_code'        => $row['product_code'] ?? '',
+            'scientific_name'     => $row['scientific_name'] ?? '',
+            'size_range'          => $row['size_range'] ?? '',
+            'specification'       => $row['specification'] ?? '',
+            'target_buying_price' => $row['target_buying_price'] ?? '',
+        ];
     }
-} else {
-    echo "No products found or error: " . $conn->error;
 }
 
+/**
+ * --------------------------
+ * Fetch available dates / months / years
+ * --------------------------
+ */
 $dateselected = [];
 $dateResult = $conn->query("
-SELECT DISTINCT date 
-FROM buyingpriceanlaysistable 
-ORDER BY date DESC");
-
+    SELECT DISTINCT date 
+    FROM buyingpriceanlaysistable 
+    ORDER BY date DESC
+");
 while ($row = $dateResult->fetch_assoc()) {
     $dateselected[] = $row['date'];
 }
 
-$count = 0;
-$avgprices = 0;
-
-/**
- * Distinct Product IDs used for grouping tabs
- */
 $productIds = [];
 $idResult = $conn->query("SELECT DISTINCT product_code FROM buyingpriceanlaysistable");
 while ($row = $idResult->fetch_assoc()) {
     $productIds[] = $row['product_code'];
 }
 
-// Get current date for edit modal
 $currentDate = isset($dateselected[0]) ? $dateselected[0] : date('Y-m-d');
 
-// Handle delete operation before any HTML output
+// Delete handler
 if (isset($_POST['id'])) {
     $id = $_POST['id'];
     $sql = "DELETE FROM buyingpriceanlaysistable WHERE id = ?";
@@ -182,7 +193,7 @@ if (isset($_POST['id'])) {
     exit();
 }
 
-// Get all available months from the database
+// Months
 $monthResult = $conn->query("
     SELECT DISTINCT DATE_FORMAT(date, '%Y-%m') as month 
     FROM buyingpriceanlaysistable 
@@ -192,11 +203,9 @@ $availableMonths = [];
 while ($row = $monthResult->fetch_assoc()) {
     $availableMonths[] = $row['month'];
 }
+$selectedMonth = $_GET['month'] ?? date('Y-m');
 
-// Get selected month from request or use current month
-$selectedMonth = isset($_GET['month']) ? $_GET['month'] : date('Y-m');
-
-// Get dates for the selected month
+// Dates for selected month
 $dateResult = $conn->query("
     SELECT DISTINCT date 
     FROM buyingpriceanlaysistable 
@@ -208,11 +217,9 @@ while ($row = $dateResult->fetch_assoc()) {
     $dateselected[] = $row['date'];
 }
 
-// Get selected year from GET parameter or use current year
+// Years - FIXED: Remove STR_TO_DATE since date is already in proper format
 $selectedYear = isset($_GET['year']) ? intval($_GET['year']) : date('Y');
-
-// Get available years from the database
-$yearSql = "SELECT DISTINCT YEAR(STR_TO_DATE(date, '%Y-%m-%d')) as year 
+$yearSql = "SELECT DISTINCT YEAR(date) as year 
             FROM buyingpriceanlaysistable 
             ORDER BY year DESC";
 $yearResult = $conn->query($yearSql);
@@ -221,15 +228,17 @@ if ($yearResult && $yearResult->num_rows > 0) {
     while ($yearRow = $yearResult->fetch_assoc()) {
         $availableYears[] = $yearRow['year'];
     }
+} else {
+    // If no years found, add current year
+    $availableYears[] = date('Y');
 }
 
-// Get distinct months for the selected year
-$monthSql = "SELECT DISTINCT DATE_FORMAT(STR_TO_DATE(date, '%Y-%m-%d'), '%Y-%m') as month_code,
-                     DATE_FORMAT(STR_TO_DATE(date, '%Y-%m-%d'), '%M %Y') as month_name 
-                     FROM buyingpriceanlaysistable 
-                     WHERE YEAR(STR_TO_DATE(date, '%Y-%m-%d')) = $selectedYear
-                     ORDER BY month_code ASC";
-        
+// Months for selected year - FIXED: Remove STR_TO_DATE
+$monthSql = "SELECT DISTINCT DATE_FORMAT(date, '%Y-%m') as month_code,
+                     DATE_FORMAT(date, '%M %Y') as month_name 
+             FROM buyingpriceanlaysistable 
+             WHERE YEAR(date) = $selectedYear
+             ORDER BY month_code ASC";
 $monthResult = $conn->query($monthSql);
 $months = [];
 if ($monthResult && $monthResult->num_rows > 0) {
@@ -238,15 +247,16 @@ if ($monthResult && $monthResult->num_rows > 0) {
     }
 }
 
-// Get distinct products
+// NEW: Fetch products for summary - Get distinct products from buying price analysis table
+$summaryProducts = [];
 $productSql = "SELECT DISTINCT product_code, product_name, scientific_name 
                FROM buyingpriceanlaysistable 
+               WHERE YEAR(date) = $selectedYear
                ORDER BY product_name";
 $productResult = $conn->query($productSql);
-$products = [];
 if ($productResult && $productResult->num_rows > 0) {
     while ($productRow = $productResult->fetch_assoc()) {
-        $products[] = $productRow;
+        $summaryProducts[] = $productRow;
     }
 }
 ?>
