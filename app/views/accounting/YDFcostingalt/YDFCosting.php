@@ -230,7 +230,7 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\YDFcostinga
                 <i class="fas fa-dollar-sign"></i> Change Exchange Rate
             </button>
 
-            <button type="button" class="btn btn-primary px-4" data-bs-toggle="modal" data-bs-target="#costingModal" id="addCostingBtn"> + Costing Record Input</button>
+            <button type="button" class="btn btn-primary px-4" data-bs-toggle="modal" data-bs-target="#costingModal" id="addCostingBtn"><i class="fa fa-plus"></i> Costing Record Input</button>
         </div>
         <!-- CostingEnter Modal-->
         <div class="modal fade" id="costingModal" tabindex="-1" aria-labelledby="costingModalLabel" aria-hidden="true">
@@ -415,26 +415,26 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\YDFcostinga
                         <th class="sticky-col text-center">Product Code</th>
                         <th class="sticky-col-2 text-center">Product Name</th>
                         <th class="sticky-col-3 text-center">Specification</th>
-                        <th>Buying Price</th>
-                        <th>Volume</th>
-                        <th>Expected Yield</th>
-                        <th>Processed Cost</th>
-                        <th>Buying and Logistics Cost</th>
-                        <th>Total</th>
-                        <th>Exchange Rate to USD</th>
-                        <th>USD Price</th>
-                        <th>Processing</th>
-                        <th>Packaging Cost</th>
-                        <th>Freight Cost</th>
-                        <th>Estimated Gross to Net Ratio</th>
-                        <th>Freight Cost for the Gross</th>
-                        <th>CNF</th>
-                        <th>Margin</th>
-                        <th>Price</th>
-                        <th>Price 500g</th>
-                        <th>Rounded Price</th>
-                        <th>Price + MCO</th>
-                        <th>Actions</th>
+                        <th class="text-center">Buying Price</th>
+                        <th class="text-center">Volume</th>
+                        <th class="text-center">Expected Yield</th>
+                        <th class="text-center">Processed Cost</th>
+                        <th class="text-center">Buying and Logistics Cost</th>
+                        <th class="text-center">Total</th>
+                        <th class="text-center">Exchange Rate to USD</th>
+                        <th class="text-center">USD Price</th>
+                        <th class="text-center">Processing</th>
+                        <th class="text-center">Packaging Cost</th>
+                        <th class="text-center">Freight Cost</th>
+                        <th class="text-center">Estimated Gross to Net Ratio</th>
+                        <th class="text-center">Freight Cost for the Gross</th>
+                        <th class="text-center">CNF</th>
+                        <th class="text-center">Margin</th>
+                        <th class="text-center">Price</th>
+                        <th class="text-center">Price 500g</th>
+                        <th class="text-center">Rounded Price</th>
+                        <th class="text-center">Price + MCO</th>
+                        <th class="text-center">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -560,7 +560,9 @@ $(document).ready(function() {
         },
         "order": [[0, 'asc']],
         "language": {
-            "search": "Search:",
+            "emptyTable": "No costing records available",
+            "search": "_INPUT_",
+            "searchPlaceholder": "Search records...",
             "lengthMenu": "Show _MENU_ entries",
             "info": "Showing _START_ to _END_ of _TOTAL_ entries",
             "paginate": {

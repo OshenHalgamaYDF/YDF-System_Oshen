@@ -14,7 +14,7 @@ if (!$conn) {
 $costingDatafgs = [];
 $sql = "SELECT c.id, c.product_id, p.product_name, p.product_code, p.scientific_name, c.specification, c.size, 
                c.buyingprice, c.volume, c.expectedyield, c.buyingcostandlogic, c.processingcharge, c.packagingcost, 
-               c.freightcost, c.estgrosstonet, c.type
+               c.freightcost, c.estgrosstonet, c.type, p.category
         FROM fgscosting c
         JOIN products p ON c.product_id = p.id
         ORDER BY c.id ASC";
@@ -27,12 +27,12 @@ if ($result && $result->num_rows > 0) {
 
 // Fetch latest exchange rate
 $exchangeRateUsdtoLkr = 0;
-$rateResult = $conn->query("SELECT UsdToLkr FROM exchangerateFGS ORDER BY id DESC LIMIT 1");
+$rateResult = $conn->query("SELECT UsdToLkr FROM exchangeratefgs ORDER BY id DESC LIMIT 1");
 if ($rateResult && $rateRow = $rateResult->fetch_assoc()) {
     $exchangeRateUsdtoLkr = $rateRow['UsdToLkr'];
 }
 $exchangeRateUsdtoGbp = 0;
-$rateResult = $conn->query("SELECT UsdToGbp FROM exchangerateFGS ORDER BY id DESC LIMIT 1");
+$rateResult = $conn->query("SELECT UsdToGbp FROM exchangeratefgs ORDER BY id DESC LIMIT 1");
 if ($rateResult && $rateRow = $rateResult->fetch_assoc()) {
     $exchangeRateUsdtoGbp = $rateRow['UsdToGbp'];
 }
@@ -161,6 +161,44 @@ if (isset($_POST['delete_fgs_costing']) && isset($_POST['costing_id'])) {
         exit();
     } else {
         echo "<script>alert('Error deleting record: " . $conn->error . "');</script>";
+    }
+}
+
+// ===== Fetch Current Data to Prefill Modal =====
+$sql = "SELECT UsdToLkr, EurToLkr, GbpToLkr, UsdToGbp 
+        FROM exchangeratefgs WHERE id = 1 LIMIT 1";
+$result = $conn->query($sql);
+$current = $result->fetch_assoc();
+
+// ===== Handle Update Form Submission =====
+if (isset($_POST['exchangeratereplace'])) {
+    $usdToLkr = $_POST['newUsdToLkrRate'];
+    $eurToLkr = $_POST['newEurToLkrRate'];
+    $gbpToLkr = $_POST['newGbpToLkrRate'];
+    $usdToGbp = $_POST['newUsdToGbpRate'];
+
+    if (
+        $usdToLkr == $current['UsdToLkr'] &&
+        $eurToLkr == $current['EurToLkr'] &&
+        $gbpToLkr == $current['GbpToLkr'] &&
+        $usdToGbp == $current['UsdToGbp']
+    ) {
+        echo "<script>alert('No changes detected in exchange rates.');window.location.href = 'FGSCosting.php';</script>";
+        exit();
+    }
+
+    $sql = "UPDATE exchangeratefgs
+            SET UsdToLkr = ?, EurToLkr = ?, GbpToLkr = ?, UsdToGbp = ?
+            WHERE id = 1";
+
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("dddd", $usdToLkr, $eurToLkr, $gbpToLkr, $usdToGbp);
+
+    if ($stmt->execute()) {
+        header("Location: FGSCosting.php");
+        exit();
+    } else {
+        echo "Error: " . $conn->error;
     }
 }
 ?>
