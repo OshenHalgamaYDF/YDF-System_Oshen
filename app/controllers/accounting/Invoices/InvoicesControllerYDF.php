@@ -50,16 +50,36 @@ $dateFilter = $_GET['date'] ?? null;
 $invoices = [];
 
 if ($dateFilter) {
-    $sql = "SELECT nd.fish_type,
+$sql = "SELECT 
+            nd.fish_type,
             SUM(nd.net_weight) AS total_weight,
-            (SELECT p.scientific_name FROM products p WHERE p.product_name = nd.fish_type LIMIT 1) AS scientific_name,
-            GROUP_CONCAT(DISTINCT nd.box_no SEPARATOR ', ') AS box_numbers,
-            GROUP_CONCAT(DISTINCT nd.product_type SEPARATOR ', ') AS product_type, 
+            (
+                SELECT p.scientific_name 
+                FROM products p 
+                WHERE LOWER(TRIM(REPLACE(p.product_name, 'ies', 'y'))) = LOWER(TRIM(REPLACE(nd.fish_type, 'ies', 'y')))
+                   OR LOWER(TRIM(REPLACE(p.product_name, 's', ''))) = LOWER(TRIM(REPLACE(nd.fish_type, 's', '')))
+                   OR LOWER(TRIM(REPLACE(p.product_name, 'Kingfish', ''))) = LOWER(TRIM(REPLACE(nd.fish_type, 'King Fish', '')))
+                   OR CONCAT(nd.fish_type) LIKE CONCAT('%', p.product_name, '%')
+                   OR CONCAT(p.product_name) LIKE CONCAT('%', nd.fish_type, '%')
+                LIMIT 1
+            ) AS scientific_name,
+            CASE 
+                WHEN EXISTS (
+                    SELECT 1 
+                    FROM invoices_distribution_sheet x 
+                    WHERE x.box_no = nd.box_no 
+                    AND x.fish_type <> nd.fish_type
+                ) THEN 'MIX'
+                ELSE CONCAT('Count: ', COUNT(nd.box_no))
+            END AS box_numbers,
+            GROUP_CONCAT(DISTINCT nd.product_type SEPARATOR ', ') AS product_type,
             nd.unit_price
-            FROM invoices_distribution_sheet AS nd
-            WHERE nd.production_date = ?
-            GROUP BY nd.fish_type
-            ORDER BY nd.fish_type ASC";
+        FROM invoices_distribution_sheet AS nd
+        WHERE nd.production_date = ?
+        GROUP BY nd.fish_type, nd.unit_price
+        ORDER BY nd.fish_type ASC";
+
+
     $stmt = $conn->prepare($sql);
     $stmt->bind_param("s", $dateFilter);
     $stmt->execute();

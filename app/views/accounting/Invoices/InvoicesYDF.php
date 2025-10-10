@@ -23,6 +23,95 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\Invoices\In
     <!-- DataTables FixedColumns -->
     <link rel="stylesheet" href="https://cdn.datatables.net/fixedcolumns/4.3.0/css/fixedColumns.bootstrap5.min.css">
     <script src="https://cdn.datatables.net/fixedcolumns/4.3.0/js/dataTables.fixedColumns.min.js"></script>
+    <style>
+         body {
+        background-color: #f8f9fa;
+    }
+    h1 {
+        font-weight: bold;
+        color: #0d6efd;
+        margin-bottom: 30px;
+    }
+    .table-responsive {
+        overflow-x: auto;
+        position: relative;
+        border-radius: 0.5rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+        background: #fff;
+        padding: 1rem;
+    }
+    /* Zebra striping */
+    .table-striped > tbody > tr:nth-of-type(odd) {
+        background-color: #f6f8fa;
+    }
+    /* Responsive font size */
+    @media (max-width: 1200px) {
+        #fgsCostingTable th, #fgsCostingTable td {
+            font-size: 0.92rem;
+        }
+    }
+    /* Modal styling */
+    .modal-content {
+        border-radius: 0.7rem;
+        box-shadow: 0 4px 24px rgba(0,0,0,0.12);
+    }
+    .modal-header {
+        background: #0d6efd;
+        color: #fff;
+        border-top-left-radius: 0.7rem;
+        border-top-right-radius: 0.7rem;
+    }
+    .modal-title {
+        font-weight: 600;
+        letter-spacing: 0.5px;
+    }
+    .modal-footer {
+        background: #f8f9fa;
+        border-bottom-left-radius: 0.7rem;
+        border-bottom-right-radius: 0.7rem;
+    }
+    /* Button spacing */
+    .mb-2 > .btn, .mb-2 > button {
+        margin-right: 0.5rem;
+    }
+    /* Sticky DataTables controls */
+    .dataTables_wrapper .dataTables_filter,
+    .dataTables_wrapper .dataTables_length,
+    .dataTables_wrapper .dataTables_info,
+    .dataTables_wrapper .dataTables_paginate {
+        position: sticky;
+        top: 0;
+        z-index: 12;
+        background: #fff;
+        padding: 0.5rem 1rem;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    .dataTables_wrapper .dataTables_filter { float: right; }
+    .dataTables_wrapper .dataTables_length,
+    .dataTables_wrapper .dataTables_info { float: left; }
+    .dataTables_wrapper .dataTables_paginate { float: right; margin-top: 0.5rem; }
+    /* DataTables main and cloned headers: always black */
+    #fgsCostingTable thead th,
+    .dataTables_scrollHeadInner th,
+    .dataTables_scrollHead th,
+    .dataTables_wrapper .DTFC_LeftHeadWrapper th,
+    .dataTables_wrapper .DTFC_RightHeadWrapper th,
+    .dataTables_wrapper .DTFC_LeftHeadWrapper table th,
+    .dataTables_wrapper .DTFC_RightHeadWrapper table th {
+        background: #212529 !important;
+        color: #fff !important;
+        border-bottom: 2px solid #0d6efd !important;
+        text-align: center;
+    }
+    /* Optional scrollbar styling */
+    .table-responsive::-webkit-scrollbar {
+        height: 8px;
+    }
+    .table-responsive::-webkit-scrollbar-thumb {
+        background: rgba(0,0,0,0.2);
+        border-radius: 4px;
+    }
+    </style>
 </head>
 <body>
     <!-- Invoices Header-->
@@ -155,9 +244,9 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\Invoices\In
 
     <!-- Invoices Table -->
     <div class="container mt-4">
-        <table id="invoicesTable" class="table table-striped table-bordered table-hover nowrap" style="width:100%">
+        <table id="invoicesTable" class="table table-striped table-bordered table-hover nowrap " style="width:100%">
             <thead>
-                <tr>
+                <tr class="table-dark">
                     <th>No of boxes</th>
                     <th>Weight</th>
                     <th>Description of Goods</th>
@@ -185,7 +274,7 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\Invoices\In
                         <td><?php echo htmlspecialchars($invoice['box_numbers']); ?></td>
                         <td><?php echo htmlspecialchars($total_weight); ?></td>
                         <td><?php echo htmlspecialchars($invoice['fish_type']) . ' ' . htmlspecialchars($invoice['product_type'] ?? ''); ?></td>
-                        <td><?php echo htmlspecialchars($invoice['scientific_name']); ?></td>
+                        <td><i><?php echo htmlspecialchars($invoice['scientific_name']); ?></i></td>
                         <td>$<?php echo number_format($unit_price, 2); ?></td>
                         <td>$<?php echo number_format($value, 2); ?></td>
                         <td>
@@ -260,8 +349,14 @@ $(document).ready(function() {
     
     // PDF Button functionality
     $('#pdfBtn').on('click', function() {
-        window.location.href = "invoicespdf.php";
+        const selectedDate = $('#datefilter').val();
+        if (!selectedDate) {
+            alert('Please select a date first!');
+            return;
+        }
+        window.location.href = "Invoicespdf.php?date=" + encodeURIComponent(selectedDate);
     });
+
     
     // Reset button functionality
     $('a.btn-outline-secondary').on('click', function(e) {
