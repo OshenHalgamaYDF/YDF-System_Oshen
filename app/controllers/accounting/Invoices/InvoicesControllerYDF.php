@@ -103,12 +103,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $fda_reg_no = mysqli_real_escape_string($conn, $_POST['FDAregno']);
     $consignee_address = mysqli_real_escape_string($conn, $_POST['consigneeaddress']);
     $consignee_tele = mysqli_real_escape_string($conn, $_POST['consigneetelephone']);
+    $airport_name = mysqli_real_escape_string($conn, $_POST['airportname']);
 
     // Insert query
     $sql = "INSERT INTO invoices_details 
-            (date, inv_no, awb_no, flight_details, destination, fda_reg_no, consignee_address, consignee_tele)
+            (date, inv_no, awb_no, flight_details, destination, fda_reg_no, consignee_address, consignee_tele, airport_name)
             VALUES 
-            ('$date', '$inv_no', '$awb_no', '$flight_details', '$destination', '$fda_reg_no', '$consignee_address', '$consignee_tele')";
+            ('$date', '$inv_no', '$awb_no', '$flight_details', '$destination', '$fda_reg_no', '$consignee_address', '$consignee_tele', '$airport_name')";
 
     if (mysqli_query($conn, $sql)) {
         echo "<script>alert('Invoice details added successfully!'); window.location.href='InvoicesYDF.php';</script>";

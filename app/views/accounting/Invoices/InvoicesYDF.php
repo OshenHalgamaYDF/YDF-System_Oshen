@@ -24,7 +24,7 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\Invoices\In
     <link rel="stylesheet" href="https://cdn.datatables.net/fixedcolumns/4.3.0/css/fixedColumns.bootstrap5.min.css">
     <script src="https://cdn.datatables.net/fixedcolumns/4.3.0/js/dataTables.fixedColumns.min.js"></script>
     <style>
-         body {
+    body {
         background-color: #f8f9fa;
     }
     h1 {
@@ -190,10 +190,15 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\Invoices\In
                                 <input type="text" class="form-control" id="consigneeaddress" name="consigneeaddress" required>
                                 <div class="invalid-feedback">Please enter the Consignee Address.</div>
                             </div>
-                            <div class="col-md-12">
+                            <div class="col-md-6">
                                 <label for="consigneetelephone" class="form-label">Consignee Telephone</label>
                                 <input type="text" class="form-control" id="consigneetelephone" name="consigneetelephone" required>
                                 <div class="invalid-feedback">Please enter the Consignee Telephone.</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="airportname" class="form-label">Airport Name</label>
+                                <input type="text" class="form-control" id="airportname" name="airportname" required>
+                                <div class="invalid-feedback">Please enter the Airport Name.</div>  
                             </div>
                             <div class="modal-footer">
                                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>

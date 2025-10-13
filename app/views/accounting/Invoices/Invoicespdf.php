@@ -127,22 +127,85 @@ $pdf->SetFont('Arial', 'B', 12);
 $pdf->Cell(0, 10, 'INVOICE', 0, 1, 'C');
 $pdf->Ln(3);
 
-// Consignee details
-$pdf->SetFont('Arial', '', 10);
-$pdf->Cell(0, 6, 'CONSIGNEE: NEITHAL FRESH SEAFOOD LLC', 0, 1);
-$pdf->Cell(0, 6, $header['consignee_address'] ?? 'N/A', 0, 1);
-$pdf->Cell(0, 6, 'Tel: ' . ($header['consignee_tele'] ?? 'N/A'), 0, 1);
-$pdf->Ln(5);
+// --- Define starting Y position for both columns ---
+$yStart = $pdf->GetY();
 
-// Invoice info
-$pdf->Cell(0, 6, 'DATE: ' . ($header['date'] ?? $dateFilter), 0, 1);
-$pdf->Cell(0, 6, 'INV NO: ' . ($header['inv_no'] ?? 'N/A'), 0, 1);
-$pdf->Cell(0, 6, 'AWB NO: ' . ($header['awb_no'] ?? 'N/A'), 0, 1);
-$pdf->Cell(0, 6, 'FLIGHT DETAILS: ' . ($header['flight_details'] ?? 'N/A'), 0, 1);
-$pdf->Cell(0, 6, 'DESTINATION: ' . ($header['destination'] ?? 'N/A'), 0, 1);
-$pdf->Cell(0, 6, 'FDA REG NO: ' . ($header['fda_reg_no'] ?? 'N/A'), 0, 1);
-$pdf->Cell(0, 6, 'TOTAL BOXES: ' . $totalBoxes, 0, 1);
-$pdf->Ln(8);
+// === LEFT COLUMN: Consignee Details ===
+$pdf->SetFont('Arial', '', 10);
+$pdf->SetXY(10, $yStart); // Left margin 10mm
+$pdf->SetFont('Arial', 'U', 10); // U = underline
+$pdf->Cell(0, 6, 'CONSIGNEE', 0, 1);
+$pdf->SetFont('Arial', '', 10);  // reset to normal after
+
+$pdf->SetX(10);
+$address = $header['consignee_address'] ?? 'N/A';
+$address = preg_replace('/,\s*/', ",\n", trim($address)); // break after commas
+$pdf->SetFont('Arial', 'B', 10);
+$pdf->MultiCell(80, 6, $address); // width 80mm for left column
+
+$pdf->SetX(10);
+$pdf->SetFont('Arial', 'B', 10);
+$pdf->Write(6, 'Tel: ');
+
+$pdf->SetFont('Arial', '', 10);
+$pdf->Write(6, $header['consignee_tele'] ?? 'N/A');
+$pdf->Ln(6); // move to next line
+
+
+// === RIGHT COLUMN: Invoice Info ===
+$pdf->SetXY(110, $yStart); // Move to right column start (x=110mm)
+$pdf->SetFont('Arial', 'B', 10);
+$pdf->Write(6, 'DATE: ');
+$pdf->SetFont('Arial', '', 10);
+$pdf->Write(6, $header['date'] ?? $dateFilter);
+$pdf->Ln(6);
+
+$pdf->SetX(110);
+$pdf->SetFont('Arial', 'B', 10);
+$pdf->Write(6, 'INV NO: ');
+$pdf->SetFont('Arial', '', 10);
+$pdf->Write(6, $header['inv_no'] ?? 'N/A');
+$pdf->Ln(6);
+
+$pdf->SetX(110);
+$pdf->SetFont('Arial', 'B', 10);
+$pdf->Write(6, 'AWB NO: ');
+$pdf->SetFont('Arial', '', 10);
+$pdf->Write(6, $header['awb_no'] ?? 'N/A');
+$pdf->Ln(6);
+
+$pdf->SetX(110);
+$pdf->SetFont('Arial', 'B', 10);
+$pdf->Write(6, 'FLIGHT DETAILS: ');
+$pdf->SetFont('Arial', '', 10);
+$pdf->Write(6, $header['flight_details'] ?? 'N/A');
+$pdf->Ln(6);
+
+$pdf->SetX(110);
+$pdf->SetFont('Arial', 'B', 10);
+$pdf->Write(6, 'DESTINATION: ');
+$pdf->SetFont('Arial', '', 10);
+$pdf->Write(6, $header['destination'] ?? 'N/A');
+$pdf->Ln(6);
+
+$pdf->SetX(110);
+$pdf->SetFont('Arial', 'B', 10);
+$pdf->Write(6, 'FDA REG NO: ');
+$pdf->SetFont('Arial', '', 10);
+$pdf->Write(6, $header['fda_reg_no'] ?? 'N/A');
+$pdf->Ln(6);
+
+$pdf->SetX(110);
+$pdf->SetFont('Arial', 'B', 10);
+$pdf->Write(6, 'TOTAL BOXES: ');
+$pdf->SetFont('Arial', '', 10);
+$pdf->Write(6, $totalBoxes);
+$pdf->Ln(6);
+
+
+// --- Adjust line spacing before next section ---
+$pdf->Ln(10);
+
 
 // ==== Table ====
 $pdf->TableHeader();
@@ -163,7 +226,6 @@ $pdf->Cell(165, 8, 'TOTAL (USD)', 1, 0, 'R');
 $pdf->Cell(25, 8, number_format($totalValue, 2), 1, 1, 'R');
 $pdf->Ln(5);
 
-
 // ==== Declaration ====
 $pdf->SetFont('Arial', '', 9);
 $pdf->MultiCell(0, 5,
@@ -171,20 +233,66 @@ $pdf->MultiCell(0, 5,
 "except where otherwise clearly indicated, these products are of Sri Lankan origin under GSP rules. " .
 "Origin criterion met: 'P'.");
 
-// ==== Bank details under the table always in new page====
-$pdf->AddPage();
-$pdf->SetFont('Arial', '', 8.5);
-$pdf->MultiCell(0, 5,
-    "Account No: 087910206029\n" .
-    "Swift Code : HBLILKLX\n" .
-    "Bank Code : 7083\n" .
-    "Hatton National Bank PLC - Ja-Ela Branch\n" .
-    "Invoice Value : USD " . number_format($totalValue, 2) . "\n" .
-    "YOUR DAILY FOODS (PVT) LTD.\n" .
-    "Company Reg. No. PV 00246176 | VAT Reg. No. 103246229");
+// ==== Bank details section ====
+
+// Check if there's enough space (approx. 60mm needed for bank details box)
+$pageHeight = $pdf->GetPageHeight();
+$bottomMargin = 20;
+if ($pdf->GetY() + 60 > $pageHeight - $bottomMargin) {
+    $pdf->AddPage();
+}
+
+$pdf->Ln(8);
+$pdf->SetFont('Arial', 'B', 12);
+$pdf->Cell(0, 8, 'BANK DETAILS', 0, 1, 'C');
 $pdf->Ln(5);
 
+// Draw box
+$x = 15;
+$y = $pdf->GetY();
+$w = 180;
+$h = 50;
+$pdf->SetLineWidth(0.5);
+$pdf->Rect($x, $y, $w, $h);
+
+// Move inside box with proper padding
+$pdf->SetXY($x + 10, $y + 8);
+
+// Bank details with better formatting
+$pdf->SetFont('Arial', 'B', 10);
+$pdf->Cell(35, 6, 'Account No:', 0, 0, 'L');
+$pdf->SetFont('Arial', '', 10);
+$pdf->Cell(0, 6, '087910206029', 0, 1, 'L');
+
+$pdf->SetX($x + 10);
+$pdf->SetFont('Arial', 'B', 10);
+$pdf->Cell(35, 6, 'Swift Code:', 0, 0, 'L');
+$pdf->SetFont('Arial', '', 10);
+$pdf->Cell(0, 6, 'HBLILKLX', 0, 1, 'L');
+
+$pdf->SetX($x + 10);
+$pdf->SetFont('Arial', 'B', 10);
+$pdf->Cell(35, 6, 'Bank Code:', 0, 0, 'L');
+$pdf->SetFont('Arial', '', 10);
+$pdf->Cell(0, 6, '7083', 0, 1, 'L');
+
+$pdf->SetX($x + 10);
+$pdf->SetFont('Arial', 'B', 10);
+$pdf->Cell(35, 6, 'Bank:', 0, 0, 'L');
+$pdf->SetFont('Arial', '', 10);
+$pdf->Cell(0, 6, 'Hatton National Bank PLC - Ja-Ela Branch', 0, 1, 'L');
+
+$pdf->Ln(3); // Small space before company info
+
+$pdf->SetX($x + 10);
+$pdf->SetFont('Arial', 'B', 10);
+$pdf->Cell(0, 6, 'YOUR DAILY FOODS (PVT) LTD.', 0, 1, 'L');
+
+$pdf->SetX($x + 10);
+$pdf->SetFont('Arial', '', 9);
+$pdf->Cell(0, 5, 'Company Reg. No. PV 00246176 | VAT Reg. No. 103246229', 0, 1, 'L');
+
 // Output file
-$filename = 'Invoice_' . ($header['inv_no'] ?? 'YDF') . '.pdf';
+$filename = 'Invoice ' . ($header['inv_no'] ?? 'YDF') . '.pdf';
 $pdf->Output('I', $filename);
 ?>
