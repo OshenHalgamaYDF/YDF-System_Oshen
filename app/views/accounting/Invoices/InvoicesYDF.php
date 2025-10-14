@@ -23,7 +23,7 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\Invoices\In
     <!-- DataTables FixedColumns -->
     <link rel="stylesheet" href="https://cdn.datatables.net/fixedcolumns/4.3.0/css/fixedColumns.bootstrap5.min.css">
     <script src="https://cdn.datatables.net/fixedcolumns/4.3.0/js/dataTables.fixedColumns.min.js"></script>
-    <style>
+<style>
     body {
         background-color: #f8f9fa;
     }
@@ -111,15 +111,21 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\Invoices\In
         background: rgba(0,0,0,0.2);
         border-radius: 4px;
     }
-    </style>
+</style>
 </head>
 <body>
     <!-- Invoices Header-->
     <div class="container mt-4">
         <h1 class="text-center mt-4 text-primary fw-bold">Invoices Generator</h1>
-        <div class="d-flex justify-content-between align-items-center mt-4">
+        <div class="d-flexs align-items-left mt-4">
             <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#invoicesModal">
                 <i class="fas fa-plus"></i> Invoice Details
+            </button>
+            <button class="btn btn-warning md-2" data-bs-toggle="modal" data-bs-target="#shippingDiscountModal">
+                <i class="fas fa-tags"></i> Shipping Discount
+            </button>
+            <button class="btn btn-secondary md-2" onclick="window.location.href='Invoices_discount_table.php'">
+                <i class="fas fa-table"></i> View Discount Table
             </button>
         </div>
     </div>
@@ -144,6 +150,40 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\Invoices\In
         </form>
     </div>
 
+    <!-- Shipping Discount Modal -->
+    <div class="modal fade" id="shippingDiscountModal" tabindex="-1" aria-labelledby="shippingDiscountModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form method="POST" action="" id="shippingDiscountForm">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="shippingDiscountModalLabel">Add Shipping Discount</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <!-- Add this hidden input to identify the form -->
+                        <input type="hidden" name="form_type" value="shipping_discount">
+                        <div class="mb-3">
+                            <label for="discountdate" class="form-label">Date</label>
+                            <input type="date" class="form-control" id="discountdate" name="discount_date" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="reason" class="form-label">Reason</label>
+                            <input type="text" class="form-control" id="reason" name="reason" required placeholder="Enter reason for discount">
+                        </div>
+                        <div class="mb-3">
+                            <label for="discountAmount" class="form-label">Discount Amount (USD)</label>
+                            <input type="number" step="0.01" class="form-control" id="discountAmount" name="discount_amount" required placeholder="Enter discount amount in USD">
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        <button type="submit" class="btn btn-primary">Add Discount</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <!-- Invoices Modal -->
     <div class="modal fade" id="invoicesModal" tabindex="-1" aria-labelledby="invoicesModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-lg">
@@ -155,6 +195,8 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\Invoices\In
                     </div>
                     <div class="modal-body">
                         <div class="row g-3">
+                            <!-- Add this hidden input to identify the form -->
+                            <input type="hidden" name="form_type" value="invoice_details">
                             <div class="col-md-6">
                                 <label for="date" class="form-label">Date</label>
                                 <input type="date" class="form-control" id="date" name="date" required>
@@ -221,6 +263,8 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\Invoices\In
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body">
+                        <!-- Add form identifier -->
+                        <input type="hidden" name="form_type" value="unit_price">
                         <input type="hidden" id="unitPriceFishType" name="fish_type">
                         <input type="hidden" id="unitPriceProductType" name="product_type">
                         <input type="hidden" id="unitPriceDate" name="production_date">
@@ -299,93 +343,107 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\Invoices\In
                     <td colspan="5" class="text-end fw-bold">Total Value (USD):</td>
                     <td colspan="2" class="fw-bold">$<?php echo number_format($total_price, 2); ?></td>
                 </tr>
+                <?php if ($shipping_discount_value > 0): ?>
+                <tr>
+                    <td colspan="5" class="text-end text-danger fw-bold">
+                        Deduction (<?php echo $shipping_reason; ?>):
+                    </td>
+                    <td colspan="2" class="fw-bold text-danger">
+                        -$<?php echo number_format($shipping_discount_value, 2); ?>
+                    </td>
+                </tr>
+                <tr>
+                    <td colspan="5" class="text-end fw-bold text-success">Net Total (USD):</td>
+                    <td colspan="2" class="fw-bold text-success">$<?php echo number_format($net_total, 2); ?></td>
+                </tr>
+                <?php endif; ?>
             </tfoot>
         </table>
     </div>
 
 <script>
-$(document).ready(function() {
-    // Initialize DataTable
-    $('#invoicesTable').DataTable({
-        responsive: true,
-        columnDefs: [
-            { 
-                orderable: false, 
-                targets: [6],
-                searchable: false
+    $(document).ready(function() {
+        // Initialize DataTable
+        $('#invoicesTable').DataTable({
+            responsive: true,
+            columnDefs: [
+                { 
+                    orderable: false, 
+                    targets: [6],
+                    searchable: false
+                }
+            ]
+        });
+
+        // Unit Price Modal functionality
+        const unitPriceModal = new bootstrap.Modal(document.getElementById('unitPriceModal'));
+        
+        // Use event delegation for add buttons (works with DataTable)
+        $(document).on('click', '.add-btn', function() {
+            console.log('Add button clicked'); // Debug
+            
+            // Use .data() method which automatically converts data attributes
+            const fishType = $(this).data('fish-type');
+            const productType = $(this).data('product-type') || 'N/A';
+            const date = $(this).data('date');
+            const currentPrice = $(this).data('current-price') || 0;
+            
+            console.log('Data:', { fishType, productType, date, currentPrice });
+            
+            // Set values in the modal
+            $('#unitPriceFishType').val(fishType);
+            $('#unitPriceProductType').val(productType);
+            $('#unitPriceDate').val(date);
+            $('#unitPrice').val(currentPrice);
+            
+            // Display values
+            $('#displayFishType').text(fishType);
+            $('#displayProductType').text(productType);
+            $('#displayDate').text(date);
+            
+            // Show modal
+            unitPriceModal.show();
+        });
+        
+        // Reset form when modal is hidden
+        $('#unitPriceModal').on('hidden.bs.modal', function() {
+            $('#unitPriceForm')[0].reset();
+        });
+        
+        // PDF Button functionality
+        $('#pdfBtn').on('click', function() {
+            const selectedDate = $('#datefilter').val();
+            if (!selectedDate) {
+                alert('Please select a date first!');
+                return;
             }
-        ]
+            window.location.href = "Invoicespdf.php?date=" + encodeURIComponent(selectedDate);
+        });
+
+        
+        // Reset button functionality
+        $('a.btn-outline-secondary').on('click', function(e) {
+            e.preventDefault();
+            window.location.href = window.location.pathname;
+        });
     });
 
-    // Unit Price Modal functionality
-    const unitPriceModal = new bootstrap.Modal(document.getElementById('unitPriceModal'));
-    
-    // Use event delegation for add buttons (works with DataTable)
-    $(document).on('click', '.add-btn', function() {
-        console.log('Add button clicked'); // Debug
-        
-        // Use .data() method which automatically converts data attributes
-        const fishType = $(this).data('fish-type');
-        const productType = $(this).data('product-type') || 'N/A';
-        const date = $(this).data('date');
-        const currentPrice = $(this).data('current-price') || 0;
-        
-        console.log('Data:', { fishType, productType, date, currentPrice });
-        
-        // Set values in the modal
-        $('#unitPriceFishType').val(fishType);
-        $('#unitPriceProductType').val(productType);
-        $('#unitPriceDate').val(date);
-        $('#unitPrice').val(currentPrice);
-        
-        // Display values
-        $('#displayFishType').text(fishType);
-        $('#displayProductType').text(productType);
-        $('#displayDate').text(date);
-        
-        // Show modal
-        unitPriceModal.show();
-    });
-    
-    // Reset form when modal is hidden
-    $('#unitPriceModal').on('hidden.bs.modal', function() {
-        $('#unitPriceForm')[0].reset();
-    });
-    
-    // PDF Button functionality
-    $('#pdfBtn').on('click', function() {
-        const selectedDate = $('#datefilter').val();
-        if (!selectedDate) {
-            alert('Please select a date first!');
-            return;
-        }
-        window.location.href = "Invoicespdf.php?date=" + encodeURIComponent(selectedDate);
-    });
+    (function () {
+        'use strict'
 
-    
-    // Reset button functionality
-    $('a.btn-outline-secondary').on('click', function(e) {
-        e.preventDefault();
-        window.location.href = window.location.pathname;
-    });
-});
+        // Fetch the form we want to apply validation to
+        const form = document.getElementById('fgsCostingForm');
 
-(function () {
-    'use strict'
+        form.addEventListener('submit', function (event) {
+            // Check if form is valid
+            if (!form.checkValidity()) {
+                event.preventDefault(); // Stop form submission
+                event.stopPropagation();
+            }
 
-    // Fetch the form we want to apply validation to
-    const form = document.getElementById('fgsCostingForm');
-
-    form.addEventListener('submit', function (event) {
-        // Check if form is valid
-        if (!form.checkValidity()) {
-            event.preventDefault(); // Stop form submission
-            event.stopPropagation();
-        }
-
-        form.classList.add('was-validated'); // Bootstrap class to show feedback
-    }, false);
-})();
+            form.classList.add('was-validated'); // Bootstrap class to show feedback
+        }, false);
+    })();
 </script>
 </body>
 </html>

@@ -224,7 +224,33 @@ foreach ($items as $i => $item) {
 $pdf->SetFont('Arial', 'B', 10);
 $pdf->Cell(165, 8, 'TOTAL (USD)', 1, 0, 'R');
 $pdf->Cell(25, 8, number_format($totalValue, 2), 1, 1, 'R');
+
+// ==== Fetch Shipping Discount ====
+$discount_sql = "SELECT value, reason FROM shipping_discount_details WHERE date = ? LIMIT 1";
+$stmt = $conn->prepare($discount_sql);
+$stmt->bind_param("s", $dateFilter);
+$stmt->execute();
+$discount_result = $stmt->get_result();
+$discount_data = $discount_result->fetch_assoc();
+
+$discount_value = $discount_data['value'] ?? 0;
+$discount_reason = $discount_data['reason'] ?? 'Shipping Discount';
+
+// ==== Discount Row ====
+$pdf->SetFont('Arial', '', 10);
+$pdf->Cell(165, 8, strtoupper($discount_reason) . ' (USD)', 1, 0, 'R');
+$pdf->Cell(25, 8, '-' . number_format($discount_value, 2), 1, 1, 'R');
+
+// ==== Final Amount ====
+$finalTotal = $totalValue - $discount_value;
+
+$pdf->SetFont('Arial', 'B', 11);
+$pdf->SetFillColor(230, 230, 230);
+$pdf->Cell(165, 8, 'FINAL INVOICE VALUE (USD)', 1, 0, 'R', true);
+$pdf->Cell(25, 8, number_format($finalTotal, 2), 1, 1, 'R');
+
 $pdf->Ln(5);
+
 
 // ==== Declaration ====
 $pdf->SetFont('Arial', '', 9);
