@@ -1,12 +1,12 @@
 <?php
-include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\Invoices\InvoicesControllerYDF.php');
+include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\Invoices\UK\InvoicesControllerYDFUK.php');
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Invoice Generator</title>
+    <title>Invoice Generator-UK</title>
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Bootstrap JS -->
@@ -116,7 +116,7 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\Invoices\In
 <body>
     <!-- Invoices Header-->
     <div class="container mt-4">
-        <h1 class="text-center mt-4 text-primary fw-bold">Invoices Generator</h1>
+        <h1 class="text-center mt-4 text-primary fw-bold">Invoices Generator UK</h1>
         <div class="d-flexs align-items-left mt-4">
             <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#invoicesModal">
                 <i class="fas fa-plus"></i> Invoice Details
@@ -124,7 +124,7 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\Invoices\In
             <button class="btn btn-warning md-2" data-bs-toggle="modal" data-bs-target="#shippingDiscountModal">
                 <i class="fas fa-tags"></i> Shipping Discount
             </button>
-            <button class="btn btn-secondary md-2" onclick="window.location.href='Invoices_discount_table.php'">
+            <button class="btn btn-secondary md-2" onclick="window.location.href='Invoices_discount_tableUK.php'">
                 <i class="fas fa-table"></i> View Discount Table
             </button>
         </div>
@@ -144,7 +144,7 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\Invoices\In
                 <div class="col-auto">
                     <button type="submit" id="filterBtn" class="btn btn-secondary">Filter</button>
                     <a href="" class="btn btn-outline-secondary">Reset</a>
-                    <button type="button" id="pdfBtn" class="btn btn-danger">Generate PDF</button>
+                    <button type="button" id="pdfBtn" class="btn btn-danger">Generate PDF UK</button>
                 </div>
             </div>
         </form>
@@ -203,44 +203,24 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\Invoices\In
                                 <div class="invalid-feedback">Please select a date.</div>
                             </div>
                             <div class="col-md-6">
+                                <label for="companyreg" class="form-label">Company Reg</label>
+                                <input type="text" class="form-control" id="companyreg" name="companyreg" required>
+                                <div class="invalid-feedback">Please enter the VAT Reg.</div>  
+                            </div>
+                            <div class="col-md-6">
+                                <label for="vatreg" class="form-label">VAT Reg</label>
+                                <input type="text" class="form-control" id="vatreg" name="vatreg" required>
+                                <div class="invalid-feedback">Please enter the VAT Reg.</div>  
+                            </div>
+                            <div class="col-md-6">
                                 <label for="invoiceno" class="form-label">Invoice No</label>
                                 <input type="text" class="form-control" id="invoiceno" name="invoiceno" required>
                                 <div class="invalid-feedback">Please enter the Invoice Number.</div>
                             </div>
-                            <div class="col-md-6">
-                                <label for="AWBno" class="form-label">AWB No</label>
-                                <input type="text" class="form-control" id="AWBno" name="AWBno" required>
-                                <div class="invalid-feedback">Please enter the AWB Number.</div>
-                            </div>
-                            <div class="col-md-6">
-                                <label for="flightdetails" class="form-label">Flight Details</label>
-                                <input type="text" class="form-control" id="flightdetails" name="flightdetails" required>
-                                <div class="invalid-feedback">Please enter the Flight Details.</div>
-                            </div>
-                            <div class="col-md-6">
-                                <label for="destination" class="form-label">Destination</label>
-                                <input type="text" class="form-control" id="destination" name="destination" required>
-                                <div class="invalid-feedback">Please enter the Destination.</div>
-                            </div>
-                            <div class="col-md-6">
-                                <label for="FDAregno" class="form-label">FDA Reg No</label>
-                                <input type="text" class="form-control" id="FDAregno" name="FDAregno" required>
-                                <div class="invalid-feedback">Please enter the FDA Registration Number.</div>
-                            </div>
                             <div class="col-md-12">
-                                <label for="consigneeaddress" class="form-label">Consignee Address</label>
-                                <input type="text" class="form-control" id="consigneeaddress" name="consigneeaddress" required>
-                                <div class="invalid-feedback">Please enter the Consignee Address.</div>
-                            </div>
-                            <div class="col-md-6">
-                                <label for="consigneetelephone" class="form-label">Consignee Telephone</label>
-                                <input type="text" class="form-control" id="consigneetelephone" name="consigneetelephone" required>
-                                <div class="invalid-feedback">Please enter the Consignee Telephone.</div>
-                            </div>
-                            <div class="col-md-6">
-                                <label for="airportname" class="form-label">Airport Name</label>
-                                <input type="text" class="form-control" id="airportname" name="airportname" required>
-                                <div class="invalid-feedback">Please enter the Airport Name.</div>  
+                                <label for="customer" class="form-label">Customer Details</label>
+                                <input type="text" class="form-control" id="customer" name="customer" required>
+                                <div class="invalid-feedback">Please enter the Customer Details.</div>  
                             </div>
                             <div class="modal-footer">
                                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
@@ -296,12 +276,13 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\Invoices\In
         <table id="invoicesTable" class="table table-striped table-bordered table-hover nowrap " style="width:100%">
             <thead>
                 <tr class="table-dark">
-                    <th>No of boxes</th>
-                    <th>Weight</th>
+                    <th>Product Code</th>
                     <th>Description of Goods</th>
                     <th>Scientific Name</th>
-                    <th>UNIT PRICE(USD)</th>
-                    <th>VALUE(USD)</th>
+                    <th>Sizes</th>
+                    <th>Volume Per Kg</th>
+                    <th>PRICE PER Kg(£)</th>
+                    <th>TOTAL VALUE(£)</th>
                     <th>Actions</th>
                 </tr>
             </thead>
@@ -319,13 +300,14 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\Invoices\In
                     $product_type_attr = htmlspecialchars($invoice['product_type'] ?? '', ENT_QUOTES);
                     $date_attr = htmlspecialchars($invoice['production_date'] ?? $dateFilter, ENT_QUOTES);
                 ?>
-                    <tr>
-                        <td><?php echo htmlspecialchars($invoice['box_numbers']); ?></td>
-                        <td><?php echo htmlspecialchars($total_weight); ?></td>
+                    <tr class="text-center align-middle">
+                        <td><?php echo htmlspecialchars($invoice['product_code']); ?></td>
                         <td><?php echo htmlspecialchars($invoice['fish_type']) . ' ' . htmlspecialchars($invoice['product_type'] ?? ''); ?></td>
                         <td><i><?php echo htmlspecialchars($invoice['scientific_name']); ?></i></td>
-                        <td>$<?php echo number_format($unit_price, 2); ?></td>
-                        <td>$<?php echo number_format($value, 2); ?></td>
+                        <td><?php echo htmlspecialchars($invoice['grades']); ?></td>
+                        <td><?php echo htmlspecialchars($total_weight); ?></td>
+                        <td>£<?php echo number_format($unit_price, 2); ?></td>
+                        <td>£<?php echo number_format($value, 2); ?></td>
                         <td>
                             <button class="btn btn-sm btn-info add-btn" 
                                     data-fish-type="<?php echo $fish_type_attr; ?>"
@@ -340,12 +322,12 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\Invoices\In
             </tbody>
             <tfoot>
                 <tr>
-                    <td colspan="5" class="text-end fw-bold">Total Value (USD):</td>
+                    <td colspan="6" class="text-end fw-bold">Total Value (USD):</td>
                     <td colspan="2" class="fw-bold">$<?php echo number_format($total_price, 2); ?></td>
                 </tr>
                 <?php if ($shipping_discount_value > 0): ?>
                 <tr>
-                    <td colspan="5" class="text-end text-danger fw-bold">
+                    <td colspan="6" class="text-end text-danger fw-bold">
                         Deduction (<?php echo $shipping_reason; ?>):
                     </td>
                     <td colspan="2" class="fw-bold text-danger">
@@ -353,7 +335,7 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\Invoices\In
                     </td>
                 </tr>
                 <tr>
-                    <td colspan="5" class="text-end fw-bold text-success">Net Total (USD):</td>
+                    <td colspan="6" class="text-end fw-bold text-success">Net Total (USD):</td>
                     <td colspan="2" class="fw-bold text-success">$<?php echo number_format($net_total, 2); ?></td>
                 </tr>
                 <?php endif; ?>
@@ -417,7 +399,7 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\Invoices\In
                 alert('Please select a date first!');
                 return;
             }
-            window.location.href = "Invoicespdf.php?date=" + encodeURIComponent(selectedDate);
+            window.location.href = "InvoicespdfUK.php?date=" + encodeURIComponent(selectedDate);
         });
 
         

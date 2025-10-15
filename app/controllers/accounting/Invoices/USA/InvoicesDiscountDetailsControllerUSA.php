@@ -13,7 +13,7 @@ if (!$conn) {
 // ==== Handle Delete ====
 if (isset($_POST['delete_id'])) {
     $id = intval($_POST['delete_id']);
-    $delete_sql = "DELETE FROM shipping_discount_details WHERE id = ?";
+    $delete_sql = "DELETE FROM shipping_discount_details_USA WHERE id = ?";
     $stmt = $conn->prepare($delete_sql);
     $stmt->bind_param("i", $id);
     $stmt->execute();
@@ -28,7 +28,7 @@ if (isset($_POST['edit_id'])) {
     $reason = $_POST['edit_reason'];
     $value = $_POST['edit_value'];
 
-    $update_sql = "UPDATE shipping_discount_details SET date=?, reason=?, value=? WHERE id=?";
+    $update_sql = "UPDATE shipping_discount_details_USA SET date=?, reason=?, value=? WHERE id=?";
     $stmt = $conn->prepare($update_sql);
     $stmt->bind_param("ssdi", $date, $reason, $value, $id);
     $stmt->execute();
@@ -37,6 +37,6 @@ if (isset($_POST['edit_id'])) {
 }
 
 // ==== Fetch All Records ====
-$sql = "SELECT id, date, reason, value FROM shipping_discount_details ORDER BY date DESC";
+$sql = "SELECT id, date, reason, value FROM shipping_discount_details_USA ORDER BY date DESC";
 $result = mysqli_query($conn, $sql);
 ?>

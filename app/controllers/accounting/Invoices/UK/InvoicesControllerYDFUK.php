@@ -46,12 +46,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
         // Insert query
         $sql = "
-            INSERT INTO shipping_discount_details (date, reason, value)
+            INSERT INTO shipping_discount_details_UK (date, reason, value)
             VALUES ('$date', '$reason', '$discount_amount')
         ";
 
         if (mysqli_query($conn, $sql)) {
-            header("Location: InvoicesYDF.php");
+            header("Location: InvoicesYDFUK.php");
             exit();
         } else {
             echo "<script>alert('❌ Database error: " . addslashes(mysqli_error($conn)) . "'); window.history.back();</script>";
@@ -61,23 +61,19 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         // Process invoice details form
         // Sanitize and get form values
         $date = mysqli_real_escape_string($conn, $_POST['date']);
+        $company_reg = mysqli_real_escape_string($conn, $_POST['companyreg']);
+        $vat_reg = mysqli_real_escape_string($conn, $_POST['vatreg']);
         $inv_no = mysqli_real_escape_string($conn, $_POST['invoiceno']);
-        $awb_no = mysqli_real_escape_string($conn, $_POST['AWBno']);
-        $flight_details = mysqli_real_escape_string($conn, $_POST['flightdetails']);
-        $destination = mysqli_real_escape_string($conn, $_POST['destination']);
-        $fda_reg_no = mysqli_real_escape_string($conn, $_POST['FDAregno']);
-        $consignee_address = mysqli_real_escape_string($conn, $_POST['consigneeaddress']);
-        $consignee_tele = mysqli_real_escape_string($conn, $_POST['consigneetelephone']);
-        $airport_name = mysqli_real_escape_string($conn, $_POST['airportname']);
+        $customer = mysqli_real_escape_string($conn, $_POST['customer']);
 
         // Insert query
-        $sql = "INSERT INTO invoices_details 
-                (date, inv_no, awb_no, flight_details, destination, fda_reg_no, consignee_address, consignee_tele, airport_name)
+        $sql = "INSERT INTO invoices_details_UK
+                (date, company_reg, vat_reg, inv_no, customer)
                 VALUES 
-                ('$date', '$inv_no', '$awb_no', '$flight_details', '$destination', '$fda_reg_no', '$consignee_address', '$consignee_tele', '$airport_name')";
+                ('$date', '$company_reg', '$vat_reg', '$inv_no', '$customer')";
 
         if (mysqli_query($conn, $sql)) {
-            header("Location: InvoicesYDF.php");
+            header("Location: InvoicesYDFUK.php");
             exit();
         } else {
             echo "Error: " . $sql . "<br>" . mysqli_error($conn);
@@ -102,7 +98,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $stmt->bind_param("dsss", $unit_price, $fish_type, $production_date, $product_type);
             
             if ($stmt->execute()) {
-                header("Location: InvoicesYDF.php");
+                header("Location: InvoicesYDFUK.php");
                 exit();
             } else {
                 echo "<script>alert('Error updating unit price!');</script>";
@@ -128,35 +124,37 @@ if (isset($_GET['date'])) {
 
 // Fetch invoices data for the selected date
 if ($dateFilter) {
-    $sql = "SELECT 
-                nd.fish_type,
-                SUM(nd.net_weight) AS total_weight,
-                (
-                    SELECT p.scientific_name 
-                    FROM products p 
-                    WHERE LOWER(TRIM(REPLACE(p.product_name, 'ies', 'y'))) = LOWER(TRIM(REPLACE(nd.fish_type, 'ies', 'y')))
-                       OR LOWER(TRIM(REPLACE(p.product_name, 's', ''))) = LOWER(TRIM(REPLACE(nd.fish_type, 's', '')))
-                       OR LOWER(TRIM(REPLACE(p.product_name, 'Kingfish', ''))) = LOWER(TRIM(REPLACE(nd.fish_type, 'King Fish', '')))
-                       OR CONCAT(nd.fish_type) LIKE CONCAT('%', p.product_name, '%')
-                       OR CONCAT(p.product_name) LIKE CONCAT('%', nd.fish_type, '%')
-                    LIMIT 1
-                ) AS scientific_name,
-                CASE 
-                    WHEN EXISTS (
-                        SELECT 1 
-                        FROM invoices_distribution_sheet x 
-                        WHERE x.box_no = nd.box_no 
-                        AND x.fish_type <> nd.fish_type
-                    ) THEN 'MIX'
-                    ELSE CONCAT('Count: ', COUNT(nd.box_no))
-                END AS box_numbers,
-                GROUP_CONCAT(DISTINCT nd.product_type SEPARATOR ', ') AS product_type,
-                nd.unit_price,
-                nd.production_date
-            FROM invoices_distribution_sheet AS nd
-            WHERE nd.production_date = ?
-            GROUP BY nd.fish_type, nd.unit_price, nd.production_date
-            ORDER BY nd.fish_type ASC";
+$sql = "SELECT 
+        nd.fish_type,
+        nd.product_type,  -- Added product_type to select
+        SUM(nd.net_weight) AS total_weight,
+        (
+            SELECT p.scientific_name 
+            FROM products p 
+            WHERE LOWER(TRIM(REPLACE(p.product_name, 'ies', 'y'))) = LOWER(TRIM(REPLACE(nd.fish_type, 'ies', 'y')))
+               OR LOWER(TRIM(REPLACE(p.product_name, 's', ''))) = LOWER(TRIM(REPLACE(nd.fish_type, 's', '')))
+               OR LOWER(TRIM(REPLACE(p.product_name, 'Kingfish', ''))) = LOWER(TRIM(REPLACE(nd.fish_type, 'King Fish', '')))
+               OR CONCAT(nd.fish_type) LIKE CONCAT('%', p.product_name, '%')
+               OR CONCAT(p.product_name) LIKE CONCAT('%', nd.fish_type, '%')
+            LIMIT 1
+        ) AS scientific_name,
+        (
+            SELECT p.product_code
+            FROM products p
+            WHERE LOWER(TRIM(REPLACE(p.product_name, 'ies', 'y'))) = LOWER(TRIM(REPLACE(nd.fish_type, 'ies', 'y')))
+               OR LOWER(TRIM(REPLACE(p.product_name, 's', ''))) = LOWER(TRIM(REPLACE(nd.fish_type, 's', '')))
+               OR LOWER(TRIM(REPLACE(p.product_name, 'Kingfish', ''))) = LOWER(TRIM(REPLACE(nd.fish_type, 'King Fish', '')))
+               OR CONCAT(nd.fish_type) LIKE CONCAT('%', p.product_name, '%')
+               OR CONCAT(p.product_name) LIKE CONCAT('%', nd.fish_type, '%')
+            LIMIT 1
+        ) AS product_code,
+        GROUP_CONCAT(DISTINCT nd.grades SEPARATOR ', ') AS grades,
+        nd.unit_price,
+        nd.production_date
+    FROM invoices_distribution_sheet AS nd
+    WHERE nd.production_date = ?
+    GROUP BY nd.fish_type, nd.product_type, nd.unit_price, nd.production_date
+    ORDER BY nd.fish_type ASC, nd.product_type ASC";
 
     $stmt = $conn->prepare($sql);
     $stmt->bind_param("s", $dateFilter);
@@ -180,7 +178,7 @@ foreach ($invoices as $invoice) {
 
 // Fetch shipping discount for the selected date
 if ($dateFilter) {
-    $sql = "SELECT value, reason FROM shipping_discount_details WHERE date = ?";
+    $sql = "SELECT value, reason FROM shipping_discount_details_UK WHERE date = ?";
     $stmt = $conn->prepare($sql);
     $stmt->bind_param("s", $dateFilter);
     $stmt->execute();

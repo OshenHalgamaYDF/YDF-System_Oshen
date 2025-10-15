@@ -1,5 +1,5 @@
 <?php
-include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\Invoices\InvoicesDiscountDetailsController.php');
+include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\Invoices\USA\InvoicesDiscountDetailsControllerUSA.php');
 ?>
 <!DOCTYPE html>
 <html lang="en">

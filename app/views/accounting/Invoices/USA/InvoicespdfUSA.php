@@ -18,7 +18,7 @@ if (!$dateFilter) {
 }
 
 // ==== Fetch invoice header ====
-$header_sql = "SELECT * FROM invoices_details WHERE date = ? ORDER BY id DESC LIMIT 1";
+$header_sql = "SELECT * FROM invoices_details_USA WHERE date = ? ORDER BY id DESC LIMIT 1";
 $stmt = $conn->prepare($header_sql);
 $stmt->bind_param("s", $dateFilter);
 $stmt->execute();
@@ -97,7 +97,7 @@ class PDF extends FPDF
         $this->SetFont('Arial', 'B', 9);
         $this->SetFillColor(230, 230, 230);
         $this->Cell(10, 8, '#', 1, 0, 'C', true);
-        $this->Cell(55, 8, 'Description', 1, 0, 'C', true);
+        $this->Cell(58, 8, 'Description', 1, 0, 'C', true);
         $this->Cell(50, 8, 'Scientific Name', 1, 0, 'C', true);
         $this->Cell(25, 8, 'Weight (Kg)', 1, 0, 'C', true);
         $this->Cell(25, 8, 'Unit Price', 1, 0, 'C', true);
@@ -110,7 +110,7 @@ class PDF extends FPDF
         $this->CheckPageBreak(8);
         $this->SetFont('Arial', '', 9);
         $this->Cell(10, 8, $data[0], 1, 0, 'C');
-        $this->Cell(55, 8, $data[1], 1, 0);
+        $this->Cell(58, 8, $data[1], 1, 0);
         $this->Cell(50, 8, $data[2], 1, 0);
         $this->Cell(25, 8, $data[3], 1, 0, 'R');
         $this->Cell(25, 8, $data[4], 1, 0, 'R');
@@ -222,11 +222,11 @@ foreach ($items as $i => $item) {
 
 // ==== Total ====
 $pdf->SetFont('Arial', 'B', 10);
-$pdf->Cell(165, 8, 'TOTAL (USD)', 1, 0, 'R');
+$pdf->Cell(168, 8, 'TOTAL (USD)', 1, 0, 'R');
 $pdf->Cell(25, 8, number_format($totalValue, 2), 1, 1, 'R');
 
 // ==== Fetch Shipping Discount ====
-$discount_sql = "SELECT value, reason FROM shipping_discount_details WHERE date = ? LIMIT 1";
+$discount_sql = "SELECT value, reason FROM shipping_discount_details_USA WHERE date = ? LIMIT 1";
 $stmt = $conn->prepare($discount_sql);
 $stmt->bind_param("s", $dateFilter);
 $stmt->execute();
@@ -238,7 +238,7 @@ $discount_reason = $discount_data['reason'] ?? 'Shipping Discount';
 
 // ==== Discount Row ====
 $pdf->SetFont('Arial', '', 10);
-$pdf->Cell(165, 8, strtoupper($discount_reason) . ' (USD)', 1, 0, 'R');
+$pdf->Cell(168, 8, strtoupper($discount_reason) . ' (USD)', 1, 0, 'R');
 $pdf->Cell(25, 8, '-' . number_format($discount_value, 2), 1, 1, 'R');
 
 // ==== Final Amount ====
@@ -246,7 +246,7 @@ $finalTotal = $totalValue - $discount_value;
 
 $pdf->SetFont('Arial', 'B', 11);
 $pdf->SetFillColor(230, 230, 230);
-$pdf->Cell(165, 8, 'FINAL INVOICE VALUE (USD)', 1, 0, 'R', true);
+$pdf->Cell(168, 8, 'FINAL INVOICE VALUE (USD)', 1, 0, 'R', true);
 $pdf->Cell(25, 8, number_format($finalTotal, 2), 1, 1, 'R');
 
 $pdf->Ln(5);
