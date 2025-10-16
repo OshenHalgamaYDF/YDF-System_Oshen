@@ -125,7 +125,7 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\Invoices\UK
                 <i class="fas fa-tags"></i> Shipping Discount
             </button>
             <button class="btn btn-secondary md-2" onclick="window.location.href='Invoices_discount_tableUK.php'">
-                <i class="fas fa-table"></i> View Discount Table
+                <i class="fas fa-table"></i> View Discount Table 
             </button>
         </div>
     </div>
@@ -142,7 +142,6 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\Invoices\UK
                     value="<?php echo htmlspecialchars($dateFilter ?? ''); ?>" required>
                 </div>
                 <div class="col-auto">
-                    <button type="submit" id="filterBtn" class="btn btn-secondary">Filter</button>
                     <a href="" class="btn btn-outline-secondary">Reset</a>
                     <button type="button" id="pdfBtn" class="btn btn-danger">Generate PDF UK</button>
                 </div>
@@ -250,7 +249,7 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\Invoices\UK
                         <input type="hidden" id="unitPriceDate" name="production_date">
                         
                         <div class="mb-3">
-                            <label for="unitPrice" class="form-label">Unit Price (USD)</label>
+                            <label for="unitPrice" class="form-label">Unit Price (£)</label>
                             <input type="number" step="0.01" class="form-control" id="unitPrice" name="unit_price" required placeholder="Enter unit price in USD">
                         </div>
                         <div class="mb-3">
@@ -344,88 +343,82 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\Invoices\UK
     </div>
 
 <script>
-    $(document).ready(function() {
-        // Initialize DataTable
-        $('#invoicesTable').DataTable({
-            responsive: true,
-            columnDefs: [
-                { 
-                    orderable: false, 
-                    targets: [6],
-                    searchable: false
-                }
-            ]
-        });
-
-        // Unit Price Modal functionality
-        const unitPriceModal = new bootstrap.Modal(document.getElementById('unitPriceModal'));
-        
-        // Use event delegation for add buttons (works with DataTable)
-        $(document).on('click', '.add-btn', function() {
-            console.log('Add button clicked'); // Debug
-            
-            // Use .data() method which automatically converts data attributes
-            const fishType = $(this).data('fish-type');
-            const productType = $(this).data('product-type') || 'N/A';
-            const date = $(this).data('date');
-            const currentPrice = $(this).data('current-price') || 0;
-            
-            console.log('Data:', { fishType, productType, date, currentPrice });
-            
-            // Set values in the modal
-            $('#unitPriceFishType').val(fishType);
-            $('#unitPriceProductType').val(productType);
-            $('#unitPriceDate').val(date);
-            $('#unitPrice').val(currentPrice);
-            
-            // Display values
-            $('#displayFishType').text(fishType);
-            $('#displayProductType').text(productType);
-            $('#displayDate').text(date);
-            
-            // Show modal
-            unitPriceModal.show();
-        });
-        
-        // Reset form when modal is hidden
-        $('#unitPriceModal').on('hidden.bs.modal', function() {
-            $('#unitPriceForm')[0].reset();
-        });
-        
-        // PDF Button functionality
-        $('#pdfBtn').on('click', function() {
-            const selectedDate = $('#datefilter').val();
-            if (!selectedDate) {
-                alert('Please select a date first!');
-                return;
+$(document).ready(function() {
+    // Initialize DataTable
+    $('#invoicesTable').DataTable({
+        responsive: true,
+        columnDefs: [
+            { 
+                orderable: false, 
+                targets: [6],
+                searchable: false
             }
-            window.location.href = "InvoicespdfUK.php?date=" + encodeURIComponent(selectedDate);
-        });
-
-        
-        // Reset button functionality
-        $('a.btn-outline-secondary').on('click', function(e) {
-            e.preventDefault();
-            window.location.href = window.location.pathname;
-        });
+        ]
     });
 
-    (function () {
-        'use strict'
+    // Unit Price Modal functionality
+    const unitPriceModal = new bootstrap.Modal(document.getElementById('unitPriceModal'));
+    
+    $(document).on('click', '.add-btn', function() {
+        const fishType = $(this).data('fish-type');
+        const productType = $(this).data('product-type') || 'N/A';
+        const date = $(this).data('date');
+        const currentPrice = $(this).data('current-price') || 0;
+        
+        $('#unitPriceFishType').val(fishType);
+        $('#unitPriceProductType').val(productType);
+        $('#unitPriceDate').val(date);
+        $('#unitPrice').val(currentPrice);
+        
+        $('#displayFishType').text(fishType);
+        $('#displayProductType').text(productType);
+        $('#displayDate').text(date);
+        
+        unitPriceModal.show();
+    });
+    
+    $('#unitPriceModal').on('hidden.bs.modal', function() {
+        $('#unitPriceForm')[0].reset();
+    });
+    
+    // PDF Button functionality
+    $('#pdfBtn').on('click', function() {
+        const selectedDate = $('#datefilter').val();
+        if (!selectedDate) {
+            alert('Please select a date first!');
+            return;
+        }
+        window.location.href = "InvoicespdfUK.php?date=" + encodeURIComponent(selectedDate);
+    });
 
-        // Fetch the form we want to apply validation to
-        const form = document.getElementById('fgsCostingForm');
+    // Reset button functionality
+    $('a.btn-outline-secondary').on('click', function(e) {
+        e.preventDefault();
+        window.location.href = window.location.pathname;
+    });
 
-        form.addEventListener('submit', function (event) {
-            // Check if form is valid
-            if (!form.checkValidity()) {
-                event.preventDefault(); // Stop form submission
-                event.stopPropagation();
-            }
+    // --- AUTO SUBMIT FORM WHEN DATE CHANGES ---
+    $('#datefilter').on('change', function() {
+        $(this).closest('form').submit();
+    });
+});
 
-            form.classList.add('was-validated'); // Bootstrap class to show feedback
-        }, false);
-    })();
+(function () {
+    'use strict'
+
+    // Fetch the form we want to apply validation to
+    const form = document.getElementById('fgsCostingForm');
+
+    form.addEventListener('submit', function (event) {
+        // Check if form is valid
+        if (!form.checkValidity()) {
+            event.preventDefault(); // Stop form submission
+            event.stopPropagation();
+        }
+
+        form.classList.add('was-validated'); // Bootstrap class to show feedback
+    }, false);
+})();
 </script>
 </body>
 </html>

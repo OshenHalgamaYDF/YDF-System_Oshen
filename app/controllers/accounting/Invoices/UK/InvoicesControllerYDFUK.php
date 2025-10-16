@@ -117,10 +117,21 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     exit;
 }
 
-// Handle date filter from GET request
-if (isset($_GET['date'])) {
-    $dateFilter = $_GET['date'];
+// Initialize $dateFilter from GET first
+$dateFilter = $_GET['date'] ?? null;
+
+// If no date filter, get the latest date from invoices_distribution_sheet
+if (!$dateFilter) {
+    $latestDateSql = "SELECT MAX(production_date) AS latest_date FROM invoices_distribution_sheet";
+    $result = mysqli_query($conn, $latestDateSql);
+
+    if ($result && $row = mysqli_fetch_assoc($result)) {
+        $dateFilter = $row['latest_date'];
+    } else {
+        $dateFilter = date('Y-m-d'); // fallback to today if table is empty
+    }
 }
+
 
 // Fetch invoices data for the selected date
 if ($dateFilter) {

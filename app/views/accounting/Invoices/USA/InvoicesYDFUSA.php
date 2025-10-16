@@ -6,7 +6,7 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\Invoices\US
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Invoice Generator-UK</title>
+    <title>Invoice Generator-USA</title>
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Bootstrap JS -->
@@ -142,7 +142,6 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\Invoices\US
                     value="<?php echo htmlspecialchars($dateFilter ?? ''); ?>" required>
                 </div>
                 <div class="col-auto">
-                    <button type="submit" id="filterBtn" class="btn btn-secondary">Filter</button>
                     <a href="" class="btn btn-outline-secondary">Reset</a>
                     <button type="button" id="pdfBtn" class="btn btn-danger">Generate PDF</button>
                 </div>
@@ -420,11 +419,15 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\Invoices\US
             window.location.href = "InvoicespdfUSA.php?date=" + encodeURIComponent(selectedDate);
         });
 
-        
         // Reset button functionality
         $('a.btn-outline-secondary').on('click', function(e) {
             e.preventDefault();
             window.location.href = window.location.pathname;
+        });
+
+        // --- AUTO SUBMIT FORM WHEN DATE CHANGES ---
+        $('#datefilter').on('change', function() {
+            $(this).closest('form').submit();
         });
     });
 

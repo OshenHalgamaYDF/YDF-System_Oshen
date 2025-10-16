@@ -6,7 +6,7 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\Invoices\US
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Shipping Discount Table</title>
+    <title>Shipping Discount Table USA</title>
     <!-- Bootstrap -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
@@ -112,7 +112,7 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\Invoices\US
 </head>
 <body class="bg-light">
     <div class="container mt-5">
-        <h2 class="text-center text-primary fw-bold mb-4">Shipping Discount Table</h2>
+        <h2 class="text-center text-primary fw-bold mb-4">Shipping Discount Table USA</h2>
         <div class="mb-3">
             <button class="btn btn-secondary" onclick="window.history.back()">
                 <i class="fas fa-arrow-left"></i> Back

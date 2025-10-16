@@ -78,7 +78,7 @@ class PDF extends FPDF
             $this->Cell(0, 6, 'YOUR DAILY FOODS (PVT) LTD', 0, 1, 'C');
             $this->SetFont('Arial', '', 10);
             $this->Cell(0, 6, "No. 22, St. Anthony's Mawatha, Kanuwana, Ekala, Ja-Ela, Sri Lanka", 0, 1, 'C');
-            $this->Ln(4);
+            $this->Ln(2);
         }
     }
 
@@ -130,82 +130,92 @@ $pdf->Ln(3);
 // --- Define starting Y position for both columns ---
 $yStart = $pdf->GetY();
 
+// Column settings
+$leftWidth = 80;   // Left column width
+$rightWidth = 80;  // Right column width (same as left)
+$leftMargin = 10;  // Left margin
+$rightMargin = $leftMargin + $leftWidth + 15; // Right column start (15mm gap between columns)
+
 // === LEFT COLUMN: Consignee Details ===
+$pdf->SetXY($leftMargin, $yStart);
+$pdf->SetFont('Arial', 'U', 10);
+$pdf->Cell($leftWidth, 6, 'CONSIGNEE', 0, 1);
 $pdf->SetFont('Arial', '', 10);
-$pdf->SetXY(10, $yStart); // Left margin 10mm
-$pdf->SetFont('Arial', 'U', 10); // U = underline
-$pdf->Cell(0, 6, 'CONSIGNEE', 0, 1);
-$pdf->SetFont('Arial', '', 10);  // reset to normal after
 
-$pdf->SetX(10);
+$pdf->SetX($leftMargin);
 $address = $header['consignee_address'] ?? 'N/A';
-$address = preg_replace('/,\s*/', ",\n", trim($address)); // break after commas
+$address = preg_replace('/,\s*/', ",\n", trim($address));
 $pdf->SetFont('Arial', 'B', 10);
-$pdf->MultiCell(80, 6, $address); // width 80mm for left column
+$pdf->MultiCell($leftWidth, 5, $address); // Reduced line height to 5 for better fit
 
-$pdf->SetX(10);
+$pdf->SetX($leftMargin);
 $pdf->SetFont('Arial', 'B', 10);
-$pdf->Write(6, 'Tel: ');
-
+$pdf->Cell(15, 6, 'Tel:', 0, 0);
 $pdf->SetFont('Arial', '', 10);
-$pdf->Write(6, $header['consignee_tele'] ?? 'N/A');
-$pdf->Ln(6); // move to next line
+$pdf->Cell(65, 6, $header['consignee_tele'] ?? 'N/A', 0, 1);
 
+// Get the height used by left column
+$leftColumnEndY = $pdf->GetY();
 
 // === RIGHT COLUMN: Invoice Info ===
-$pdf->SetXY(110, $yStart); // Move to right column start (x=110mm)
-$pdf->SetFont('Arial', 'B', 10);
-$pdf->Write(6, 'DATE: ');
-$pdf->SetFont('Arial', '', 10);
-$pdf->Write(6, $header['date'] ?? $dateFilter);
-$pdf->Ln(6);
+$pdf->SetXY($rightMargin, $yStart);
 
-$pdf->SetX(110);
+// DATE - Moved value more to the right
 $pdf->SetFont('Arial', 'B', 10);
-$pdf->Write(6, 'INV NO: ');
+$pdf->Cell(45, 6, 'DATE:', 0, 0); // Increased label width from 40 to 45
 $pdf->SetFont('Arial', '', 10);
-$pdf->Write(6, $header['inv_no'] ?? 'N/A');
-$pdf->Ln(6);
+$pdf->Cell(35, 6, $header['date'] ?? $dateFilter, 0, 1); // Reduced value width to push it right
 
-$pdf->SetX(110);
+// INV NO
+$pdf->SetX($rightMargin);
 $pdf->SetFont('Arial', 'B', 10);
-$pdf->Write(6, 'AWB NO: ');
+$pdf->Cell(45, 6, 'INV NO:', 0, 0);
 $pdf->SetFont('Arial', '', 10);
-$pdf->Write(6, $header['awb_no'] ?? 'N/A');
-$pdf->Ln(6);
+$pdf->Cell(35, 6, $header['inv_no'] ?? 'N/A', 0, 1);
 
-$pdf->SetX(110);
+// AWB NO
+$pdf->SetX($rightMargin);
 $pdf->SetFont('Arial', 'B', 10);
-$pdf->Write(6, 'FLIGHT DETAILS: ');
+$pdf->Cell(45, 6, 'AWB NO:', 0, 0);
 $pdf->SetFont('Arial', '', 10);
-$pdf->Write(6, $header['flight_details'] ?? 'N/A');
-$pdf->Ln(6);
+$pdf->Cell(35, 6, $header['awb_no'] ?? 'N/A', 0, 1);
 
-$pdf->SetX(110);
+// FLIGHT DETAILS
+$pdf->SetX($rightMargin);
 $pdf->SetFont('Arial', 'B', 10);
-$pdf->Write(6, 'DESTINATION: ');
+$pdf->Cell(45, 6, 'FLIGHT DETAILS:', 0, 0);
 $pdf->SetFont('Arial', '', 10);
-$pdf->Write(6, $header['destination'] ?? 'N/A');
-$pdf->Ln(6);
+$pdf->Cell(35, 6, $header['flight_details'] ?? 'N/A', 0, 1);
 
-$pdf->SetX(110);
+// DESTINATION
+$pdf->SetX($rightMargin);
 $pdf->SetFont('Arial', 'B', 10);
-$pdf->Write(6, 'FDA REG NO: ');
+$pdf->Cell(45, 6, 'DESTINATION:', 0, 0);
 $pdf->SetFont('Arial', '', 10);
-$pdf->Write(6, $header['fda_reg_no'] ?? 'N/A');
-$pdf->Ln(6);
+$pdf->Cell(35, 6, $header['destination'] ?? 'N/A', 0, 1);
 
-$pdf->SetX(110);
+// FDA REG NO
+$pdf->SetX($rightMargin);
 $pdf->SetFont('Arial', 'B', 10);
-$pdf->Write(6, 'TOTAL BOXES: ');
+$pdf->Cell(45, 6, 'FDA REG NO:', 0, 0);
 $pdf->SetFont('Arial', '', 10);
-$pdf->Write(6, $totalBoxes);
-$pdf->Ln(6);
+$pdf->Cell(35, 6, $header['fda_reg_no'] ?? 'N/A', 0, 1);
 
+// TOTAL BOXES
+$pdf->SetX($rightMargin);
+$pdf->SetFont('Arial', 'B', 10);
+$pdf->Cell(45, 6, 'TOTAL BOXES:', 0, 0);
+$pdf->SetFont('Arial', '', 10);
+$pdf->Cell(35, 6, $totalBoxes, 0, 1);
+
+// Get the height used by right column
+$rightColumnEndY = $pdf->GetY();
+
+// Set Y position to the bottom of whichever column is longer
+$pdf->SetY(max($leftColumnEndY, $rightColumnEndY) + 5); // Add some spacing after
 
 // --- Adjust line spacing before next section ---
-$pdf->Ln(10);
-
+$pdf->Ln(7);
 
 // ==== Table ====
 $pdf->TableHeader();
