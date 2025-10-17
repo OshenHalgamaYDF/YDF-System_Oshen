@@ -10,20 +10,52 @@ if (!$conn) {
     die("Connection failed: " . mysqli_connect_error());
 }
 
-// --- Fetch Data ---
+// --- Get latest date for default filter ---
+$latestDate = '';
+$latestDateResult = $conn->query("SELECT MAX(`date`) AS latest_date FROM fgscosting");
+if ($latestDateResult && $latestDateRow = $latestDateResult->fetch_assoc()) {
+    $latestDate = $latestDateRow['latest_date'];
+}
+
+// --- Fetch Data (filtered by date if provided) ---
 $costingDatafgs = [];
-$sql = "SELECT c.id, c.product_id, p.product_name, p.product_code, p.scientific_name, c.specification, c.size, 
-               c.buyingprice, c.volume, c.expectedyield, c.buyingcostandlogic, c.processingcharge, c.packagingcost, 
-               c.freightcost, c.estgrosstonet, c.type, p.category
+$dateFilter = isset($_GET['dateFilter']) ? $_GET['dateFilter'] : '';
+if (!empty($dateFilter)) {
+    // Ensure valid date
+    $d = DateTime::createFromFormat('Y-m-d', $dateFilter);
+    if ($d && $d->format('Y-m-d') === $dateFilter) {
+        $dateFilter = $d->format('Y-m-d'); // safe
+    } else {
+        $dateFilter = $latestDate; // fallback
+    }
+    // Filter by selected date
+    $sql = "SELECT c.id, c.`date`, c.product_id, p.product_name, p.product_code, p.scientific_name,
+               c.specification, c.size, c.buyingprice, c.volume, c.expectedyield,
+               c.buyingcostandlogic, c.processingcharge, c.packagingcost, c.freightcost,
+               c.estgrosstonet, c.type, p.category
         FROM fgscosting c
         JOIN products p ON c.product_id = p.id
-        ORDER BY c.id ASC";
+        WHERE DATE(c.`date`) = '$dateFilter'
+        ORDER BY c.`date` DESC, c.id ASC";
+} else {
+    // Default: latest date
+    $sql = "SELECT c.id, c.`date`, c.product_id, p.product_name, p.product_code, p.scientific_name,
+               c.specification, c.size, c.buyingprice, c.volume, c.expectedyield,
+               c.buyingcostandlogic, c.processingcharge, c.packagingcost, c.freightcost,
+               c.estgrosstonet, c.type, p.category
+        FROM fgscosting c
+        JOIN products p ON c.product_id = p.id
+        WHERE DATE(c.`date`) = (SELECT MAX(DATE(`date`)) FROM fgscosting)
+        ORDER BY c.`date` DESC, c.id ASC";
+}
+
 $result = $conn->query($sql);
 if ($result && $result->num_rows > 0) {
     while ($row = $result->fetch_assoc()) {
         $costingDatafgs[] = $row;
     }
 }
+
 
 // Fetch latest exchange rate
 $exchangeRateUsdtoLkr = 0;
@@ -55,6 +87,7 @@ if (isset($_POST['get_costing']) && isset($_POST['costing_id'])) {
 // --- Handle form submission ---
 if (isset($_POST['add_fgs_costing'])) {
     // Get form data with proper field names
+    $date = $_POST['fgsdate'];
     $product_id = intval($_POST['product_id']);
     $type = $_POST['type'];
     $size = $_POST['size'];
@@ -68,17 +101,18 @@ if (isset($_POST['add_fgs_costing'])) {
     $freight_cost = floatval($_POST['freightcost']);
     $estimate_gross_to_net = floatval($_POST['estimate_gross_to_net']);
 
-    // Prepare INSERT query
+    // Prepare INSERT query with date
     $sql = "INSERT INTO fgscosting 
-        (product_id, type, size, specification, buyingprice, volume, 
+        (date, product_id, type, size, specification, buyingprice, volume, 
          expectedyield, buyingcostandlogic, processingcharge, packagingcost, 
          freightcost, estgrosstonet)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
     
     $stmt = $conn->prepare($sql);
     if ($stmt) {
         $stmt->bind_param(
-            "isssdddddddd", 
+            "sisssdddddddd", 
+            $date,
             $product_id,  
             $type,
             $size, 
@@ -110,6 +144,7 @@ if (isset($_POST['add_fgs_costing'])) {
 // --- Handle edit (update) ---
 if (isset($_POST['edit_fgs_costing']) && isset($_POST['costing_id'])) {
     $id = intval($_POST['costing_id']);
+    $date = $_POST['fgsdate'];
     $product_id = intval($_POST['product_id']);
     $type = $_POST['type'];
     $size = $_POST['size'];
@@ -123,17 +158,17 @@ if (isset($_POST['edit_fgs_costing']) && isset($_POST['costing_id'])) {
     $buyingandlogistic_cost = floatval($_POST['buyingandlogistic_cost']);
     $estimate_gross_to_net = floatval($_POST['estimate_gross_to_net']);
 
-    // Fixed UPDATE query - only update fields that exist in fgscosting table
+    // Fixed UPDATE query - include date field
     $sql = "UPDATE fgscosting SET 
-        product_id=?, type=?, size=?, specification=?, buyingprice=?, volume=?, 
+        date=?, product_id=?, type=?, size=?, specification=?, buyingprice=?, volume=?, 
         expectedyield=?, processingcharge=?, packagingcost=?, freightcost=?, 
         buyingcostandlogic=?, estgrosstonet=?
         WHERE id=?";
     
     $stmt = $conn->prepare($sql);
     if ($stmt) {
-        $stmt->bind_param("isssddddddddi", 
-            $product_id, $type, $size, $specification, $buying_price, $volume, 
+        $stmt->bind_param("sisssddddddddi", 
+            $date, $product_id, $type, $size, $specification, $buying_price, $volume, 
             $expected_yield, $processing_charge, $packaging_cost, $freightcost, 
             $buyingandlogistic_cost, $estimate_gross_to_net, $id
         );
@@ -200,5 +235,5 @@ if (isset($_POST['exchangeratereplace'])) {
     } else {
         echo "Error: " . $conn->error;
     }
-}
+} 
 ?>

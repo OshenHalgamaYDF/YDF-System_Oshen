@@ -23,115 +23,115 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\FGScosting\
     <!-- DataTables FixedColumns -->
     <link rel="stylesheet" href="https://cdn.datatables.net/fixedcolumns/4.3.0/css/fixedColumns.bootstrap5.min.css">
     <script src="https://cdn.datatables.net/fixedcolumns/4.3.0/js/dataTables.fixedColumns.min.js"></script>
-<style>
-    body {
-        background-color: #f8f9fa;
-    }
-    h1 {
-        font-weight: bold;
-        color: #0d6efd;
-        margin-bottom: 30px;
-    }
-    .table-responsive {
-        overflow-x: auto;
-        position: relative;
-        border-radius: 0.5rem;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.07);
-        background: #fff;
-        padding: 1rem;
-    }
-    /* Main table cells */
-    #fgsCostingTable th,
-    #fgsCostingTable td {
-        vertical-align: middle !important;
-        text-align: center;
-        font-size: 0.97rem;
-        white-space: nowrap;
-        min-width: 100px;
-    }
-    /* Sticky header */
-    #fgsCostingTable thead th {
-        position: sticky;
-        top: 0;
-        z-index: 5;
-        background: #212529 !important;
-        color: #fff !important;
-        font-size: 1rem;
-        border-bottom: 2px solid #0d6efd !important;
-        text-align: center;
-    }
-    /* Zebra striping */
-    .table-striped > tbody > tr:nth-of-type(odd) {
-        background-color: #f6f8fa;
-    }
-    /* Responsive font size */
-    @media (max-width: 1200px) {
-        #fgsCostingTable th, #fgsCostingTable td {
-            font-size: 0.92rem;
+    <style>
+        body {
+            background-color: #f8f9fa;
         }
-    }
-    /* Modal styling */
-    .modal-content {
-        border-radius: 0.7rem;
-        box-shadow: 0 4px 24px rgba(0,0,0,0.12);
-    }
-    .modal-header {
-        background: #0d6efd;
-        color: #fff;
-        border-top-left-radius: 0.7rem;
-        border-top-right-radius: 0.7rem;
-    }
-    .modal-title {
-        font-weight: 600;
-        letter-spacing: 0.5px;
-    }
-    .modal-footer {
-        background: #f8f9fa;
-        border-bottom-left-radius: 0.7rem;
-        border-bottom-right-radius: 0.7rem;
-    }
-    /* Button spacing */
-    .mb-2 > .btn, .mb-2 > button {
-        margin-right: 0.5rem;
-    }
-    /* Sticky DataTables controls */
-    .dataTables_wrapper .dataTables_filter,
-    .dataTables_wrapper .dataTables_length,
-    .dataTables_wrapper .dataTables_info,
-    .dataTables_wrapper .dataTables_paginate {
-        position: sticky;
-        top: 0;
-        z-index: 12;
-        background: #fff;
-        padding: 0.5rem 1rem;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-    }
-    .dataTables_wrapper .dataTables_filter { float: right; }
-    .dataTables_wrapper .dataTables_length,
-    .dataTables_wrapper .dataTables_info { float: left; }
-    .dataTables_wrapper .dataTables_paginate { float: right; margin-top: 0.5rem; }
-    /* DataTables main and cloned headers: always black */
-    #fgsCostingTable thead th,
-    .dataTables_scrollHeadInner th,
-    .dataTables_scrollHead th,
-    .dataTables_wrapper .DTFC_LeftHeadWrapper th,
-    .dataTables_wrapper .DTFC_RightHeadWrapper th,
-    .dataTables_wrapper .DTFC_LeftHeadWrapper table th,
-    .dataTables_wrapper .DTFC_RightHeadWrapper table th {
-        background: #212529 !important;
-        color: #fff !important;
-        border-bottom: 2px solid #0d6efd !important;
-        text-align: center;
-    }
-    /* Optional scrollbar styling */
-    .table-responsive::-webkit-scrollbar {
-        height: 8px;
-    }
-    .table-responsive::-webkit-scrollbar-thumb {
-        background: rgba(0,0,0,0.2);
-        border-radius: 4px;
-    }
-</style>
+        h1 {
+            font-weight: bold;
+            color: #0d6efd;
+            margin-bottom: 30px;
+        }
+        .table-responsive {
+            overflow-x: auto;
+            position: relative;
+            border-radius: 0.5rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+            background: #fff;
+            padding: 1rem;
+        }
+        /* Main table cells */
+        #fgsCostingTable th,
+        #fgsCostingTable td {
+            vertical-align: middle !important;
+            text-align: center;
+            font-size: 0.97rem;
+            white-space: nowrap;
+            min-width: 100px;
+        }
+        /* Sticky header */
+        #fgsCostingTable thead th {
+            position: sticky;
+            top: 0;
+            z-index: 5;
+            background: #212529 !important;
+            color: #fff !important;
+            font-size: 1rem;
+            border-bottom: 2px solid #0d6efd !important;
+            text-align: center;
+        }
+        /* Zebra striping */
+        .table-striped > tbody > tr:nth-of-type(odd) {
+            background-color: #f6f8fa;
+        }
+        /* Responsive font size */
+        @media (max-width: 1200px) {
+            #fgsCostingTable th, #fgsCostingTable td {
+                font-size: 0.92rem;
+            }
+        }
+        /* Modal styling */
+        .modal-content {
+            border-radius: 0.7rem;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.12);
+        }
+        .modal-header {
+            background: #0d6efd;
+            color: #fff;
+            border-top-left-radius: 0.7rem;
+            border-top-right-radius: 0.7rem;
+        }
+        .modal-title {
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+        .modal-footer {
+            background: #f8f9fa;
+            border-bottom-left-radius: 0.7rem;
+            border-bottom-right-radius: 0.7rem;
+        }
+        /* Button spacing */
+        .mb-2 > .btn, .mb-2 > button {
+            margin-right: 0.5rem;
+        }
+        /* Sticky DataTables controls */
+        .dataTables_wrapper .dataTables_filter,
+        .dataTables_wrapper .dataTables_length,
+        .dataTables_wrapper .dataTables_info,
+        .dataTables_wrapper .dataTables_paginate {
+            position: sticky;
+            top: 0;
+            z-index: 12;
+            background: #fff;
+            padding: 0.5rem 1rem;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .dataTables_wrapper .dataTables_filter { float: right; }
+        .dataTables_wrapper .dataTables_length,
+        .dataTables_wrapper .dataTables_info { float: left; }
+        .dataTables_wrapper .dataTables_paginate { float: right; margin-top: 0.5rem; }
+        /* DataTables main and cloned headers: always black */
+        #fgsCostingTable thead th,
+        .dataTables_scrollHeadInner th,
+        .dataTables_scrollHead th,
+        .dataTables_wrapper .DTFC_LeftHeadWrapper th,
+        .dataTables_wrapper .DTFC_RightHeadWrapper th,
+        .dataTables_wrapper .DTFC_LeftHeadWrapper table th,
+        .dataTables_wrapper .DTFC_RightHeadWrapper table th {
+            background: #212529 !important;
+            color: #fff !important;
+            border-bottom: 2px solid #0d6efd !important;
+            text-align: center;
+        }
+        /* Optional scrollbar styling */
+        .table-responsive::-webkit-scrollbar {
+            height: 8px;
+        }
+        .table-responsive::-webkit-scrollbar-thumb {
+            background: rgba(0,0,0,0.2);
+            border-radius: 4px;
+        }
+    </style>
 </head>
 <body>
     <!-- FGS costing Header-->
@@ -146,6 +146,18 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\FGScosting\
             </button>
         </div>
     </div>
+
+    <!-- Date Filter -->
+    <div class="container-fluid mb-4">
+        <div class="mb-3">
+            <label for="dateFilter" class="form-label fw-bold me-2">Filter by Date:</label>
+            <input type="date" id="dateFilter" class="form-control d-inline-block w-auto"
+       value="<?php echo isset($_GET['dateFilter']) ? htmlspecialchars($_GET['dateFilter']) : ($latestDate ?? date('Y-m-d')); ?>">
+            <button type="button" id="clearDateFilter" class="btn btn-outline-secondary ms-2">Clear</button>
+            <button type="button" id="showAllDates" class="btn btn-outline-primary ms-2">Show All</button>
+        </div>
+    </div>   
+
     <!-- Type Filter -->
     <div class="container-fluid mb-4">
         <div class="mb-3">
@@ -169,6 +181,11 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\FGScosting\
                     </div>
                     <div class="modal-body">
                         <div class="row g-3">
+                            <div class="col-md-12">
+                                <label for="fgsdate" class="form-label">Date</label>
+                                <input type="date" class="form-control" id="fgsdate" name="fgsdate" value="<?php echo date('Y-m-d'); ?>" required>
+                                <div class="invalid-feedback">Please enter the Date.</div>
+                            </div>
                             <div class="col-md-12">
                                 <label for="product_id" class="form-label">Product</label>
                                 <select class="form-select" id="product_id" name="product_id" required>
@@ -421,155 +438,205 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\FGScosting\
         </div>
     </div>
 <script>
-$(document).ready(function() {
-    // Initialize DataTable with FixedColumns
-    var table = $('#fgsCostingTable').DataTable({
-        scrollX: true,
-        scrollY: "60vh",
-        scrollCollapse: true,
-        paging: true,
-        fixedHeader: true,
-        autoWidth: false,
-        fixedColumns: {
-            left: 4, // Fix first 4 columns (Product Code to Specification)
-            right: 1  // Fix last column (Actions)
-        },
-        columnDefs: [
-            { targets: [2], visible: false } // Hide Type column (3rd column)
-        ],
-        language: {
-            search: "_INPUT_",
-            searchPlaceholder: "Search records..."
-        }
-    });
-
-    // --- Remember and auto-apply Type Filter ---
-    $('#typeFilter').on('change', function() {
-        var selectedType = $(this).val();
-        localStorage.setItem('fgsTypeFilter', selectedType); // Save filter
-        table.column(2).search(selectedType).draw(); // Apply filter to column 2 (Type)
-    });
-
-    // --- On page load, restore the previous filter ---
-    var savedType = localStorage.getItem('fgsTypeFilter');
-    if (savedType !== null && savedType !== "") {
-        $('#typeFilter').val(savedType);
-        table.column(2).search(savedType).draw(); // Apply saved filter
-    }
-
-    // --- TOOLTIP INIT ---
-    $('[data-bs-toggle="tooltip"]').tooltip();
-
-    // --- STICKY HEADER FIX (Bootstrap + DataTables) ---
-    $('.dataTables_scrollHead').css({
-        'position': 'sticky',
-        'top': '0',
-        'z-index': '10'
-    });
-    
-    // --- Populate Product Code and Scientific Name on Product Change ---
-    $('#product_id').on('change', function() {
-        var selected = $(this).find('option:selected');
-        $('#product_code').val(selected.data('product-code') || '');
-        $('#scientific_name').val(selected.data('scientific-name') || '');
-    });
-
-    // Function to reset modal to add state
-    function resetModalToAddState() {
-        $('#fgsCostingForm')[0].reset();
-        $('#fgsCostingForm').removeClass('was-validated');
-        $('#fgsCostingForm input[name="costing_id"]').remove();
-        $('#fgsCostingForm button[type="submit"]').attr('name', 'add_fgs_costing').text('Add Costing');
-        $('#addCostingModalLabel').text('Add New FGS Costing');
-        $('#product_code').val('');
-        $('#scientific_name').val('');
-    }
-
-    // When add button is clicked, reset the modal
-    $('button[data-bs-target="#addCostingModal"]').on('click', function() {
-        resetModalToAddState();
-    });
-
-    // When modal is hidden, reset it to add state
-    $('#addCostingModal').on('hidden.bs.modal', function() {
-        resetModalToAddState();
-    });
-
-    // Form validation
-    (function () {
-        'use strict';
-        var form = document.getElementById('fgsCostingForm');
-        form.addEventListener('submit', function (event) {
-            if (!form.checkValidity()) {
-                event.preventDefault();
-                event.stopPropagation();
-            }
-            form.classList.add('was-validated');
-        }, false);
-    })();
-
-    // Edit button click
-    $(document).on('click', '.edit-btn', function() {
-        var costingId = $(this).data('id');
-
-        $.ajax({
-            url: 'FGSCosting.php',
-            type: 'POST',
-            data: { get_costing: 1, costing_id: costingId },
-            dataType: 'json',
-            success: function(data) {
-                if (data.success) {
-                    // Reset form first
-                    $('#fgsCostingForm')[0].reset();
-                    $('#fgsCostingForm input[name="costing_id"]').remove();
-                    
-                    // Add hidden field for costing ID
-                    $('<input>').attr({
-                        type: 'hidden',
-                        name: 'costing_id',
-                        value: costingId
-                    }).appendTo('#fgsCostingForm');
-
-                    // Set product and trigger change to populate code and scientific name
-                    $('#product_id').val(data.costing.product_id).trigger('change');
-
-                    // Fill other fields
-                    $('#type').val(data.costing.type);
-                    $('#size').val(data.costing.size);
-                    $('#specification').val(data.costing.specification);
-                    $('#buying_price').val(data.costing.buyingprice);
-                    $('#volume').val(data.costing.volume);
-                    $('#expected_yield').val(data.costing.expectedyield);
-                    $('#processing_charge').val(data.costing.processingcharge);
-                    $('#packaging_cost').val(data.costing.packagingcost);
-                    $('#freightcost').val(data.costing.freightcost);
-                    $('#buyingandlogistic_cost').val(data.costing.buyingcostandlogic);
-                    $('#estimate_gross_to_net').val(data.costing.estgrosstonet);
-
-                    // Update button and modal title
-                    $('#fgsCostingForm button[type="submit"]').attr('name', 'edit_fgs_costing').text('Update Costing');
-                    $('#addCostingModalLabel').text('Edit FGS Costing');
-                    $('#fgsCostingForm').removeClass('was-validated');
-
-                    // Show modal
-                    $('#addCostingModal').modal('show');
-                } else {
-                    alert('Could not fetch costing data.');
-                }
+    $(document).ready(function() {
+        // Initialize DataTable with FixedColumns
+        var table = $('#fgsCostingTable').DataTable({
+            scrollX: true,
+            scrollY: "60vh",
+            scrollCollapse: true,
+            paging: true,
+            fixedHeader: true,
+            autoWidth: false,
+            fixedColumns: {
+                left: 4, // Fix first 4 columns (Product Code to Category)
+                right: 1  // Fix last column (Actions)
             },
-            error: function() {
-                alert('Error fetching costing data.');
+            columnDefs: [
+                { targets: [2], visible: false } // Hide Type column (3rd column)
+            ],
+            language: {
+                search: "_INPUT_",
+                searchPlaceholder: "Search records..."
             }
         });
-    });
 
-    // Delete button click
-    $(document).on('click', '.delete-btn', function() {
-        var costingId = $(this).data('id');
-        $('#delete_costing_id').val(costingId);
-        $('#deleteCostingModal').modal('show');
+        // --- Date Filter Functionality ---
+        $('#dateFilter').on('change', function() {
+            var selectedDate = $(this).val();
+            localStorage.setItem('fgsDateFilter', selectedDate);
+            if (selectedDate) {
+                window.location.href = '?dateFilter=' + selectedDate;
+            } else {
+                window.location.href = 'FGSCosting.php';
+            }
+        });
+
+
+        // --- Clear Date Filter ---
+        $('#clearDateFilter').on('click', function() {
+            $('#dateFilter').val('');
+            table.search('').draw();
+            localStorage.removeItem('fgsDateFilter');
+        });
+
+        // --- Show All Dates ---
+        $('#showAllDates').on('click', function() {
+            $('#dateFilter').val('');
+            table.search('').draw();
+            localStorage.removeItem('fgsDateFilter');
+        });
+
+        // --- Type Filter Functionality ---
+        $('#typeFilter').on('change', function() {
+            var selectedType = $(this).val();
+            localStorage.setItem('fgsTypeFilter', selectedType); // Save filter
+            
+            if (selectedType === '') {
+                table.column(2).search('').draw(); // Clear type filter
+            } else {
+                table.column(2).search('^' + selectedType + '$', true, false).draw();
+            }
+        });
+
+        // --- On page load, restore the previous filters ---
+        var savedDate = localStorage.getItem('fgsDateFilter');
+        var savedType = localStorage.getItem('fgsTypeFilter');
+        
+        // Apply saved date filter
+        if (savedDate !== null && savedDate !== "") {
+            $('#dateFilter').val(savedDate);
+            table.search(savedDate).draw();
+        } else {
+            // If no saved filter, show latest date by default
+            var latestDate = '<?php echo $latestDate; ?>';
+            if (latestDate) {
+                $('#dateFilter').val(latestDate);
+                table.search(latestDate).draw();
+            }
+        }
+        
+        // Apply saved type filter
+        if (savedType !== null && savedType !== "") {
+            $('#typeFilter').val(savedType);
+            table.column(2).search('^' + savedType + '$', true, false).draw();
+        }
+
+        // --- TOOLTIP INIT ---
+        $('[data-bs-toggle="tooltip"]').tooltip();
+
+        // --- STICKY HEADER FIX (Bootstrap + DataTables) ---
+        $('.dataTables_scrollHead').css({
+            'position': 'sticky',
+            'top': '0',
+            'z-index': '10'
+        });
+        
+        // --- Populate Product Code and Scientific Name on Product Change ---
+        $('#product_id').on('change', function() {
+            var selected = $(this).find('option:selected');
+            $('#product_code').val(selected.data('product-code') || '');
+            $('#scientific_name').val(selected.data('scientific-name') || '');
+        });
+
+        // Function to reset modal to add state
+        function resetModalToAddState() {
+            $('#fgsCostingForm')[0].reset();
+            $('#fgsCostingForm').removeClass('was-validated');
+            $('#fgsCostingForm input[name="costing_id"]').remove();
+            $('#fgsCostingForm button[type="submit"]').attr('name', 'add_fgs_costing').text('Add Costing');
+            $('#addCostingModalLabel').text('Add New FGS Costing');
+            $('#product_code').val('');
+            $('#scientific_name').val('');
+            // Set default date to today
+            $('#fgsdate').val('<?php echo date('Y-m-d'); ?>');
+        }
+
+        // When add button is clicked, reset the modal
+        $('button[data-bs-target="#addCostingModal"]').on('click', function() {
+            resetModalToAddState();
+        });
+
+        // When modal is hidden, reset it to add state
+        $('#addCostingModal').on('hidden.bs.modal', function() {
+            resetModalToAddState();
+        });
+
+        // Form validation
+        (function () {
+            'use strict';
+            var form = document.getElementById('fgsCostingForm');
+            form.addEventListener('submit', function (event) {
+                if (!form.checkValidity()) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                }
+                form.classList.add('was-validated');
+            }, false);
+        })();
+
+        // Edit button click
+        $(document).on('click', '.edit-btn', function() {
+            var costingId = $(this).data('id');
+
+            $.ajax({
+                url: 'FGSCosting.php',
+                type: 'POST',
+                data: { get_costing: 1, costing_id: costingId },
+                dataType: 'json',
+                success: function(data) {
+                    if (data.success) {
+                        // Reset form first
+                        $('#fgsCostingForm')[0].reset();
+                        $('#fgsCostingForm input[name="costing_id"]').remove();
+                        
+                        // Add hidden field for costing ID
+                        $('<input>').attr({
+                            type: 'hidden',
+                            name: 'costing_id',
+                            value: costingId
+                        }).appendTo('#fgsCostingForm');
+
+                        // Set product and trigger change to populate code and scientific name
+                        $('#product_id').val(data.costing.product_id).trigger('change');
+
+                        // Fill other fields including date
+                        $('#fgsdate').val(data.costing.date);
+                        $('#type').val(data.costing.type);
+                        $('#size').val(data.costing.size);
+                        $('#specification').val(data.costing.specification);
+                        $('#buying_price').val(data.costing.buyingprice);
+                        $('#volume').val(data.costing.volume);
+                        $('#expected_yield').val(data.costing.expectedyield);
+                        $('#processing_charge').val(data.costing.processingcharge);
+                        $('#packaging_cost').val(data.costing.packagingcost);
+                        $('#freightcost').val(data.costing.freightcost);
+                        $('#buyingandlogistic_cost').val(data.costing.buyingcostandlogic);
+                        $('#estimate_gross_to_net').val(data.costing.estgrosstonet);
+
+                        // Update button and modal title
+                        $('#fgsCostingForm button[type="submit"]').attr('name', 'edit_fgs_costing').text('Update Costing');
+                        $('#addCostingModalLabel').text('Edit FGS Costing');
+                        $('#fgsCostingForm').removeClass('was-validated');
+
+                        // Show modal
+                        $('#addCostingModal').modal('show');
+                    } else {
+                        alert('Could not fetch costing data.');
+                    }
+                },
+                error: function() {
+                    alert('Error fetching costing data.');
+                }
+            });
+        });
+
+        // Delete button click
+        $(document).on('click', '.delete-btn', function() {
+            var costingId = $(this).data('id');
+            $('#delete_costing_id').val(costingId);
+            $('#deleteCostingModal').modal('show');
+        });
     });
-});
 </script>
 </body>
 </html>
