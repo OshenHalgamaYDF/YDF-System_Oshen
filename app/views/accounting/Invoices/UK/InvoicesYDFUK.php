@@ -343,82 +343,82 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\Invoices\UK
     </div>
 
 <script>
-$(document).ready(function() {
-    // Initialize DataTable
-    $('#invoicesTable').DataTable({
-        responsive: true,
-        columnDefs: [
-            { 
-                orderable: false, 
-                targets: [6],
-                searchable: false
+    $(document).ready(function() {
+        // Initialize DataTable
+        $('#invoicesTable').DataTable({
+            responsive: true,
+            columnDefs: [
+                { 
+                    orderable: false, 
+                    targets: [6],
+                    searchable: false
+                }
+            ]
+        });
+
+        // Unit Price Modal functionality
+        const unitPriceModal = new bootstrap.Modal(document.getElementById('unitPriceModal'));
+        
+        $(document).on('click', '.add-btn', function() {
+            const fishType = $(this).data('fish-type');
+            const productType = $(this).data('product-type') || 'N/A';
+            const date = $(this).data('date');
+            const currentPrice = $(this).data('current-price') || 0;
+            
+            $('#unitPriceFishType').val(fishType);
+            $('#unitPriceProductType').val(productType);
+            $('#unitPriceDate').val(date);
+            $('#unitPrice').val(currentPrice);
+            
+            $('#displayFishType').text(fishType);
+            $('#displayProductType').text(productType);
+            $('#displayDate').text(date);
+            
+            unitPriceModal.show();
+        });
+        
+        $('#unitPriceModal').on('hidden.bs.modal', function() {
+            $('#unitPriceForm')[0].reset();
+        });
+        
+        // PDF Button functionality
+        $('#pdfBtn').on('click', function() {
+            const selectedDate = $('#datefilter').val();
+            if (!selectedDate) {
+                alert('Please select a date first!');
+                return;
             }
-        ]
+            window.location.href = "InvoicespdfUK.php?date=" + encodeURIComponent(selectedDate);
+        });
+
+        // Reset button functionality
+        $('a.btn-outline-secondary').on('click', function(e) {
+            e.preventDefault();
+            window.location.href = window.location.pathname;
+        });
+
+        // --- AUTO SUBMIT FORM WHEN DATE CHANGES ---
+        $('#datefilter').on('change', function() {
+            $(this).closest('form').submit();
+        });
     });
 
-    // Unit Price Modal functionality
-    const unitPriceModal = new bootstrap.Modal(document.getElementById('unitPriceModal'));
-    
-    $(document).on('click', '.add-btn', function() {
-        const fishType = $(this).data('fish-type');
-        const productType = $(this).data('product-type') || 'N/A';
-        const date = $(this).data('date');
-        const currentPrice = $(this).data('current-price') || 0;
-        
-        $('#unitPriceFishType').val(fishType);
-        $('#unitPriceProductType').val(productType);
-        $('#unitPriceDate').val(date);
-        $('#unitPrice').val(currentPrice);
-        
-        $('#displayFishType').text(fishType);
-        $('#displayProductType').text(productType);
-        $('#displayDate').text(date);
-        
-        unitPriceModal.show();
-    });
-    
-    $('#unitPriceModal').on('hidden.bs.modal', function() {
-        $('#unitPriceForm')[0].reset();
-    });
-    
-    // PDF Button functionality
-    $('#pdfBtn').on('click', function() {
-        const selectedDate = $('#datefilter').val();
-        if (!selectedDate) {
-            alert('Please select a date first!');
-            return;
-        }
-        window.location.href = "InvoicespdfUK.php?date=" + encodeURIComponent(selectedDate);
-    });
+    (function () {
+        'use strict'
 
-    // Reset button functionality
-    $('a.btn-outline-secondary').on('click', function(e) {
-        e.preventDefault();
-        window.location.href = window.location.pathname;
-    });
+        // Fetch the form we want to apply validation to
+        const form = document.getElementById('fgsCostingForm');
 
-    // --- AUTO SUBMIT FORM WHEN DATE CHANGES ---
-    $('#datefilter').on('change', function() {
-        $(this).closest('form').submit();
-    });
-});
+        form.addEventListener('submit', function (event) {
+            // Check if form is valid
+            if (!form.checkValidity()) {
+                event.preventDefault(); // Stop form submission
+                event.stopPropagation();
+            }
 
-(function () {
-    'use strict'
-
-    // Fetch the form we want to apply validation to
-    const form = document.getElementById('fgsCostingForm');
-
-    form.addEventListener('submit', function (event) {
-        // Check if form is valid
-        if (!form.checkValidity()) {
-            event.preventDefault(); // Stop form submission
-            event.stopPropagation();
-        }
-
-        form.classList.add('was-validated'); // Bootstrap class to show feedback
-    }, false);
-})();
+            form.classList.add('was-validated'); // Bootstrap class to show feedback
+        }, false);
+    })();
 </script>
 </body>
 </html>
