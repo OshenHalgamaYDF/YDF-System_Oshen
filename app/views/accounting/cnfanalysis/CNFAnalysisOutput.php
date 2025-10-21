@@ -1,5 +1,120 @@
 <?php
-include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\cnfanalysis\CNFAnalysisController.php');
+$servername = "localhost";
+$username   = "root";
+$password   = "";
+$database   = "ydf-system";
+
+$conn = new mysqli($servername, $username, $password, $database);
+if ($conn->connect_error) {
+    die("Connection failed: " . $conn->connect_error);
+}
+
+// Get exchange rate
+$exchangeRateUsdtoGbp = 0;
+$rateResult = $conn->query("SELECT UsdToGbp FROM exchangeratefgs ORDER BY id DESC LIMIT 1");
+if ($rateResult && $rateRow = $rateResult->fetch_assoc()) {
+    $exchangeRateUsdtoGbp = $rateRow['UsdToGbp'];
+}
+
+// Get unique years from the database
+$yearQuery = "SELECT DISTINCT YEAR(date) as year FROM fgscosting ORDER BY year DESC";
+$yearResult = $conn->query($yearQuery);
+$years = [];
+while($row = $yearResult->fetch_assoc()) {
+    $years[] = $row['year'];
+}
+
+// Get unique months for the current year
+$currentYear = date('Y');
+$monthQuery = "SELECT DISTINCT DATE_FORMAT(date, '%Y-%m') as month, 
+                      DATE_FORMAT(date, '%M %Y') as month_name 
+               FROM fgscosting 
+               WHERE YEAR(date) = '$currentYear' 
+               ORDER BY month DESC";
+$monthResult = $conn->query($monthQuery);
+$months = [];
+while($row = $monthResult->fetch_assoc()) {
+    $months[] = $row;
+}
+
+// Get all data for the table
+$dataQuery = "SELECT date, type, size, specification, buyingprice, volume,  
+                     buyingcostandlogic, processingcharge, packagingcost, freightcost, estgrosstonet,
+                     p.scientific_name, p.product_code, p.category, p.product_name
+              FROM fgscosting 
+              JOIN products p ON product_id=p.id
+              ORDER BY date DESC, product_code ASC";
+$dataResult = $conn->query($dataQuery);
+$allData = [];
+while($row = $dataResult->fetch_assoc()) {
+    $allData[] = $row;
+}
+
+// Organize data by month and date for the table structure
+$monthlyData = [];
+$monthlyAverages = [];
+
+foreach($allData as $row) {
+    $month = date('Y-m', strtotime($row['date']));
+    $date = date('Y-m-d', strtotime($row['date']));
+    
+    // Calculate CNF
+    $usdPrice = $row['buyingprice'];
+    $freightForGross = ($row['freightcost'] + $row['freightcost'] * ($row['estgrosstonet'] / 100));
+    $cnfUsd = $usdPrice + $row['processingcharge'] + $row['packagingcost'] + $freightForGross;
+    $cnf = $exchangeRateUsdtoGbp > 0 ? $cnfUsd / $exchangeRateUsdtoGbp : $cnfUsd;
+    
+    $row['cnf'] = $cnf;
+    
+    if (!isset($monthlyData[$month])) {
+        $monthlyData[$month] = [];
+        $monthlyAverages[$month] = [];
+    }
+    if (!isset($monthlyData[$month][$date])) {
+        $monthlyData[$month][$date] = [];
+    }
+    
+    $monthlyData[$month][$date][] = $row;
+    
+    // Store for average calculation - use unique key with date to handle multiple entries
+    $productKey = $row['product_code'] . '|' . $date;
+    if (!isset($monthlyAverages[$month][$productKey])) {
+        $monthlyAverages[$month][$productKey] = [
+            'total_cnf' => 0,
+            'count' => 0,
+            'product_data' => $row,
+            'product_code' => $row['product_code'],
+            'date' => $date
+        ];
+    }
+    $monthlyAverages[$month][$productKey]['total_cnf'] += $cnf;
+    $monthlyAverages[$month][$productKey]['count']++;
+}
+
+// Calculate averages per product per month
+$productAverages = [];
+foreach($monthlyAverages as $month => $dateProducts) {
+    foreach($dateProducts as $productKey => $data) {
+        $productCode = $data['product_code'];
+        if (!isset($productAverages[$month][$productCode])) {
+            $productAverages[$month][$productCode] = [
+                'total_cnf' => 0,
+                'count' => 0,
+                'product_data' => $data['product_data']
+            ];
+        }
+        $productAverages[$month][$productCode]['total_cnf'] += $data['total_cnf'];
+        $productAverages[$month][$productCode]['count'] += $data['count'];
+    }
+}
+
+// Calculate final averages
+foreach($productAverages as $month => $products) {
+    foreach($products as $productCode => $data) {
+        $productAverages[$month][$productCode]['average_cnf'] = 
+            $data['total_cnf'] / $data['count'];
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -16,120 +131,317 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\cnfanalysis
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <!-- DataTables CSS -->
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
-    <!-- DataTables JS -->
-    <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
-    <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+    <style>
+        .nav-tabs .nav-link.active {
+            font-weight: bold;
+            background-color: #e9ecef;
+        }
+        .table th {
+            background-color: #f8f9fa;
+        }
+        .cnf-header {
+            background-color: #d1ecf1 !important;
+            font-weight: bold;
+        }
+        .date-column {
+            background-color: #e9ecef;
+            font-weight: bold;
+        }
+        .average-column {
+            background-color: #fff3cd !important;
+            font-weight: bold;
+        }
+        .product-row:hover {
+            background-color: #f8f9fa;
+        }
+        .month-table {
+            margin-bottom: 30px;
+        }
+        .product-details-column {
+            min-width: 120px;
+        }
+        .cnf-cell {
+            min-width: 80px;
+        }
+        .dataTables_wrapper {
+            position: relative;
+        }
+    </style>
 </head>
 <body>
-<div class="container mt-5">
-    <h1 class="text-center text-primary fw-bold mb-4">Shipment CNF Analysis</h2>
-    <div class="mb-2">
-        <button type="button" class="btn btn-primary px-4" data-bs-toggle="modal" data-bs-target="#cnfModal" id="addcnfBtn">
-            + CNF Data
-        </button>
-    </div>
+<div class="container-fluid mt-5">
+    <h2 class="text-center text-primary fw-bold mb-4">Shipment CNF Analysis</h2>
+    <h4 class="text-left text-primary">Please Select year to view CNF analysis</h4>
 
-    <div class="modal fade" id="cnfModal" tabindex="-1" aria-labelledby="offelModalLabel" aria-hidden="true">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <!-- Modal Header -->
-                <div class="modal-header">
-                    <h5 class="modal-title" id="offelModalLabel">Form to Add CNF Price Record</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <form method="post" class="row g-3" id="cnfForm" novalidate autocomplete="off">
-                        <div class="col-md-12">
-                            <label>Date:</label>
-                            <input type="date" name="date" id="date" class="form-control" required>
-                            <div class="invalid-feedback">Please enter a date.</div>
-                        </div>
-
-                        <div class="col-md-12">
-                            <label>Product Name:</label>
-                            <select name="product_name" id="product_name" class="form-select" required onchange="fillProductDetails()">
-                                <option value="">Select Product</option>
-                                <?php foreach ($products as $product): ?>
-                                    <option
-                                        value="<?= htmlspecialchars($product['product_name'] ?? '') ?>"
-                                        data-product-code="<?= htmlspecialchars($product['product_code'] ?? '') ?>"
-                                        data-scientific-name="<?= htmlspecialchars($product['scientific_name'] ?? '') ?>"
-                                        data-size-range="<?= htmlspecialchars($product['size_range'] ?? '') ?>"
-                                        data-specification="<?= htmlspecialchars($product['specification'] ?? '') ?>"
-                                    >
-                                        <?= htmlspecialchars($product['product_name'] ?? 'Unknown Product') ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                            <div class="invalid-feedback">Please select a product.</div>
-                        </div>
-
-                        <input type="hidden" name="scientific_name" id="scientific_name" />
-
-                        <div class="col-md-6">
-                            <label>Product Code:</label>
-                            <input type="text" name="product_code" id="product_code" class="form-control" required readonly>
-                            <div class="invalid-feedback">Product code is required.</div>
-                        </div>
-
-                        <div class="col-md-6">
-                            <label>Size Range:</label>
-                            <input type="text" name="size_range" id="size_range" class="form-control" required>
-                            <div class="invalid-feedback">Please enter the size range.</div>
-                        </div>
-
-                        <div class="col-md-6">
-                            <label>Specification:</label>
-                            <input type="text" name="specification" id="specification" class="form-control" required>
-                            <div class="invalid-feedback">Please enter the specification.</div>
-                        </div>
-
-                        <div class="col-md-6">
-                            <label>CNF Price:</label>
-                            <input type="number" step="0.01" name="target_price" id="target_price" class="form-control" required>
-                            <div class="invalid-feedback">Please enter the target price.</div>
-                        </div>
-
-                        <!-- Modal Footer -->
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                            <button type="submit" name="Submitcnf" class="btn btn-primary px-4">Add</button>
-                        </div>
-                    </form>
-                </div>
-            </div>
+    <!-- Year Filter and Monthly Tabs -->
+    <div class="container-fluid mb-4">
+        <div class="mb-3">
+            <label for="yearFilter" class="form-label fw-bold me-2">Filter by Year:</label>
+            <select id="yearFilter" class="form-select d-inline-block w-auto">
+                <option value="all">All Years</option>
+                <?php foreach($years as $year): ?>
+                <option value="<?php echo $year; ?>" <?php echo $year == $currentYear ? 'selected' : ''; ?>>
+                    <?php echo $year; ?>
+                </option>
+                <?php endforeach; ?>
+            </select>
+            <button type="button" id="clearYearFilter" class="btn btn-outline-secondary ms-2">Clear</button>
         </div>
+        
+        <!-- Monthly Tabs - Show latest month first -->
+        <ul class="nav nav-tabs" id="monthTabs">
+            <?php 
+            $firstMonth = true;
+            foreach($months as $month): 
+            ?>
+            <li class="nav-item">
+                <a class="nav-link <?php echo $firstMonth ? 'active' : ''; ?>" data-month="<?php echo $month['month']; ?>">
+                    <?php echo $month['month_name']; ?>
+                </a>
+            </li>
+            <?php 
+            $firstMonth = false;
+            endforeach; 
+            ?>
+        </ul>
     </div>
     
-    <!-- Table CNF Analysis-->
-    <div class="container-fluid mb-5">
-        <div class="table-responsive">
-            <table id="fgsCostingTable" class="table table-striped table-bordered" style="width:100%">
-                <thead>
-                    <tr>
-                        <th class="text-center">Product Code</th>
-                        <th class="text-center">Product Name</th>
-                        <th class="text-center">Scientific Name</th>
-                        <th class="text-center">Size Range</th>
-                        <th class="text-center">Specification</th>
-                        <th class="text-center">CNF</th>
-                        <th class="text-center">Average</th>
-                    </tr>
-                </thead>
-            </table>
+    <!-- CNF Analysis Tables -->
+    <div class="container-fluid mb-5" id="cnfTablesContainer">
+        <?php 
+        $firstTable = true;
+        foreach($monthlyData as $month => $dates): 
+            $monthName = date('F Y', strtotime($month . '-01'));
+            $monthDates = array_keys($dates);
+            sort($monthDates);
+        ?>
+        <div class="month-table <?php echo $firstTable ? '' : 'd-none'; ?>" data-month="<?php echo $month; ?>">
+            <h4 class="text-primary mb-3"><?php echo $monthName; ?> - CNF Analysis</h4>
+            <div class="table-responsive">
+                <table class="table table-bordered table-striped month-cnf-table" style="width:100%">
+                    <thead>
+                        <tr>
+                            <!-- Product Detail Columns -->
+                            <th class="text-center date-column product-details-column">Product Code</th>
+                            <th class="text-center date-column product-details-column">Product Name</th>
+                            <th class="text-center date-column product-details-column">Scientific Name</th>
+                            <th class="text-center date-column product-details-column">Size</th>
+                            <th class="text-center date-column product-details-column">Specification</th>
+                            
+                            <!-- Daily CNF Columns -->
+                            <?php foreach($monthDates as $date): 
+                                $dayName = date('D', strtotime($date));
+                                $dayNumber = date('j', strtotime($date));
+                            ?>
+                            <th class="text-center cnf-header cnf-cell" title="<?php echo $date; ?>">
+                                <?php echo $dayName ?><br><?php echo $dayNumber; ?>
+                            </th>
+                            <?php endforeach; ?>
+                            
+                            <!-- Average Column -->
+                            <th class="text-center average-column cnf-cell">Monthly Average</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php
+                        // Get all unique products for this month
+                        $products = [];
+                        foreach($dates as $dateData) {
+                            foreach($dateData as $productData) {
+                                $productKey = $productData['product_code'] . '|' . $productData['product_name'];
+                                if (!isset($products[$productKey])) {
+                                    $products[$productKey] = $productData;
+                                }
+                            }
+                        }
+                        
+                        foreach($products as $productKey => $product): 
+                            list($productCode, $productName) = explode('|', $productKey);
+                            $averageCnf = isset($productAverages[$month][$productCode]) ? 
+                                number_format($productAverages[$month][$productCode]['average_cnf'], 2) : '-';
+                        ?>
+                        <tr class="product-row">
+                            <!-- Product Detail Cells -->
+                            <td class="text-center">
+                                <strong class="text-primary"><?php echo $productCode; ?></strong>
+                            </td>
+                            <td class="text-center">
+                                <?php echo $productName; ?>
+                            </td>
+                            <td class="text-center">
+                                <span class="small"><?php echo $product['scientific_name']; ?></span>
+                            </td>
+                            <td class="text-center">
+                                <?php echo $product['size']; ?>
+                            </td>
+                            <td class="text-center">
+                                <?php echo $product['specification']; ?>
+                            </td>
+                            
+                            <!-- Daily CNF Cells -->
+                            <?php foreach($monthDates as $date): ?>
+                            <td class="text-center cnf-cell">
+                                <?php
+                                $cnfValue = '';
+                                if (isset($dates[$date])) {
+                                    // Find all matching products for this date and code
+                                    $matchingProducts = array_filter($dates[$date], function($p) use ($productCode) {
+                                        return $p['product_code'] == $productCode;
+                                    });
+                                    
+                                    if (!empty($matchingProducts)) {
+                                        // If multiple entries for same product on same date, take average
+                                        $total = 0;
+                                        $count = 0;
+                                        foreach($matchingProducts as $matchedProduct) {
+                                            $total += $matchedProduct['cnf'];
+                                            $count++;
+                                        }
+                                        $cnfValue = number_format($total / $count, 2);
+                                    }
+                                }
+                                echo $cnfValue ?: '-';
+                                ?>
+                            </td>
+                            <?php endforeach; ?>
+                            
+                            <!-- Average Cell -->
+                            <td class="text-center average-column cnf-cell fw-bold">
+                                <?php echo $averageCnf; ?>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                        
+                        <!-- Monthly Summary Row -->
+                        <tr class="table-info">
+                            <td class="text-center fw-bold" colspan="5">Monthly Summary</td>
+                            <?php 
+                            // Calculate daily averages
+                            $dailyAverages = [];
+                            foreach($monthDates as $date) {
+                                $dailyTotal = 0;
+                                $dailyCount = 0;
+                                if (isset($dates[$date])) {
+                                    foreach($dates[$date] as $productData) {
+                                        $dailyTotal += $productData['cnf'];
+                                        $dailyCount++;
+                                    }
+                                }
+                                $dailyAverages[$date] = $dailyCount > 0 ? number_format($dailyTotal / $dailyCount, 2) : '-';
+                            }
+                            
+                            foreach($monthDates as $date): 
+                            ?>
+                            <td class="text-center cnf-cell fw-bold">
+                                <?php echo $dailyAverages[$date]; ?>
+                            </td>
+                            <?php endforeach; ?>
+                            <td class="text-center average-column cnf-cell fw-bold">
+                                <?php
+                                $monthlyTotal = 0;
+                                $monthlyCount = 0;
+                                if (isset($productAverages[$month])) {
+                                    foreach($productAverages[$month] as $productData) {
+                                        $monthlyTotal += $productData['average_cnf'];
+                                        $monthlyCount++;
+                                    }
+                                }
+                                echo $monthlyCount > 0 ? number_format($monthlyTotal / $monthlyCount, 2) : '-';
+                                ?>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
+        <?php 
+        $firstTable = false;
+        endforeach; 
+        ?>
     </div>
     
 </div>
 <script>
-    function fillProductDetails() {
-        const productSelect = document.getElementById('product_name');
-        const selectedOption = productSelect.options[productSelect.selectedIndex];
+$(document).ready(function() {
+    // Simple tab functionality without DataTables complexity
+    function showMonth(month) {
+        // Hide all tables
+        $('.month-table').addClass('d-none');
+        
+        // Show selected month table
+        $(`.month-table[data-month="${month}"]`).removeClass('d-none');
+        
+        // Update active tab
+        $('#monthTabs a').removeClass('active');
+        $(`#monthTabs a[data-month="${month}"]`).addClass('active');
+    }
 
-        document.getElementById('product_code').value = selectedOption.dataset.productCode || '';
-        document.getElementById('scientific_name').value = selectedOption.dataset.scientificName || '';
-        document.getElementById('size_range').value = selectedOption.dataset.sizeRange || '';
-        document.getElementById('specification').value = selectedOption.dataset.specification || '';
-    }    
+    // Month tab click event
+    $('#monthTabs').on('click', 'a', function(e) {
+        e.preventDefault();
+        const selectedMonth = $(this).data('month');
+        showMonth(selectedMonth);
+    });
+
+    // Year filter functionality
+    $('#yearFilter').on('change', function() {
+        const selectedYear = $(this).val();
+
+        if (selectedYear === 'all') {
+            // Show all months and tabs
+            $('#monthTabs li').show();
+            $('.month-table').removeClass('d-none');
+        } else {
+            // Filter months by year
+            $('#monthTabs li').each(function() {
+                const tabMonth = $(this).find('a').data('month');
+                const tabYear = tabMonth.split('-')[0];
+                if (tabYear === selectedYear) {
+                    $(this).show();
+                } else {
+                    $(this).hide();
+                }
+            });
+            
+            // Show tables for selected year only
+            $('.month-table').addClass('d-none');
+            $('.month-table').each(function() {
+                const tableMonth = $(this).data('month');
+                const tableYear = tableMonth.split('-')[0];
+                if (tableYear === selectedYear) {
+                    $(this).removeClass('d-none');
+                }
+            });
+        }
+
+        // Activate first visible tab
+        const firstVisibleTab = $('#monthTabs a:visible').first();
+        if (firstVisibleTab.length) {
+            const visibleMonth = firstVisibleTab.data('month');
+            showMonth(visibleMonth);
+        }
+    });
+
+    // Clear year filter
+    $('#clearYearFilter').on('click', function() {
+        $('#yearFilter').val('all').trigger('change');
+    });
+
+    // Initialize with first month
+    const firstMonth = $('#monthTabs a.active').data('month');
+    showMonth(firstMonth);
+
+    // Initialize simple DataTables without complex features
+    $('.month-cnf-table').DataTable({
+        paging: false,
+        searching: true,
+        ordering: true,
+        info: false,
+        autoWidth: false,
+        scrollX: true,
+        dom: '<"row"<"col-sm-12"f>>rtip'
+    });
+});
 </script>
+</body>
 </html>
