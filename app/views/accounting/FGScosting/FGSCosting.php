@@ -1,5 +1,5 @@
 <?php
-include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\FGScosting\FGSCostingController.php');
+    include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\FGScosting\FGSCostingController.php');
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -152,11 +152,19 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\FGScosting\
         <div class="mb-3">
             <label for="dateFilter" class="form-label fw-bold me-2">Filter by Date:</label>
             <input type="date" id="dateFilter" class="form-control d-inline-block w-auto"
-       value="<?php echo isset($_GET['dateFilter']) ? htmlspecialchars($_GET['dateFilter']) : ($latestDate ?? date('Y-m-d')); ?>">
+            value="<?php echo isset($_GET['dateFilter']) && !empty($_GET['dateFilter']) ? htmlspecialchars($_GET['dateFilter']) : ''; ?>">
             <button type="button" id="clearDateFilter" class="btn btn-outline-secondary ms-2">Clear</button>
-            <button type="button" id="showAllDates" class="btn btn-outline-primary ms-2">Show All</button>
+            <small class="text-muted ms-2">
+                <?php 
+                if (empty($_GET['dateFilter'])) {
+                    echo "Showing all records";
+                } else {
+                    echo "Filtered by: " . htmlspecialchars($_GET['dateFilter']);
+                }
+                ?>
+            </small>
         </div>
-    </div>   
+    </div>
 
     <!-- Type Filter -->
     <div class="container-fluid mb-4">
@@ -452,7 +460,14 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\FGScosting\
                 right: 1  // Fix last column (Actions)
             },
             columnDefs: [
-                { targets: [2], visible: false } // Hide Type column (3rd column)
+                { 
+                    targets: [2], // Type column
+                    visible: false
+                },
+                {
+                    targets: '_all', // Make all columns searchable
+                    searchable: true
+                }
             ],
             language: {
                 search: "_INPUT_",
@@ -464,32 +479,36 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\FGScosting\
         $('#dateFilter').on('change', function() {
             var selectedDate = $(this).val();
             localStorage.setItem('fgsDateFilter', selectedDate);
+            
             if (selectedDate) {
-                window.location.href = '?dateFilter=' + selectedDate;
+                // Redirect to apply server-side filter
+                window.location.href = 'FGSCosting.php?dateFilter=' + selectedDate;
             } else {
+                // Clear filter and show all records
                 window.location.href = 'FGSCosting.php';
             }
         });
 
-
         // --- Clear Date Filter ---
         $('#clearDateFilter').on('click', function() {
-            $('#dateFilter').val('');
-            table.search('').draw();
+            $('#dateFilter').val(''); // Clear the date input
             localStorage.removeItem('fgsDateFilter');
+            // Redirect to show all records (no date filter)
+            window.location.href = 'FGSCosting.php';
         });
 
         // --- Show All Dates ---
         $('#showAllDates').on('click', function() {
-            $('#dateFilter').val('');
-            table.search('').draw();
+            $('#dateFilter').val(''); // Clear the date input
             localStorage.removeItem('fgsDateFilter');
+            // Redirect to show all records (no date filter)
+            window.location.href = 'FGSCosting.php';
         });
 
         // --- Type Filter Functionality ---
         $('#typeFilter').on('change', function() {
             var selectedType = $(this).val();
-            localStorage.setItem('fgsTypeFilter', selectedType); // Save filter
+            localStorage.setItem('fgsTypeFilter', selectedType);
             
             if (selectedType === '') {
                 table.column(2).search('').draw(); // Clear type filter
@@ -502,25 +521,28 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\FGScosting\
         var savedDate = localStorage.getItem('fgsDateFilter');
         var savedType = localStorage.getItem('fgsTypeFilter');
         
-        // Apply saved date filter
-        if (savedDate !== null && savedDate !== "") {
-            $('#dateFilter').val(savedDate);
-            table.search(savedDate).draw();
-        } else {
-            // If no saved filter, show latest date by default
-            var latestDate = '<?php echo $latestDate; ?>';
-            if (latestDate) {
-                $('#dateFilter').val(latestDate);
-                table.search(latestDate).draw();
-            }
-        }
-        
-        // Apply saved type filter
+        // Apply saved type filter (client-side)
         if (savedType !== null && savedType !== "") {
             $('#typeFilter').val(savedType);
             table.column(2).search('^' + savedType + '$', true, false).draw();
         }
 
+        // Note: Date filter is handled server-side, so we just set the input value
+        // If there's a date filter in URL, use it and save to localStorage
+        var urlParams = new URLSearchParams(window.location.search);
+        var urlDateFilter = urlParams.get('dateFilter');
+        
+        if (urlDateFilter) {
+            $('#dateFilter').val(urlDateFilter);
+            localStorage.setItem('fgsDateFilter', urlDateFilter);
+        } else if (savedDate !== null && savedDate !== "") {
+            $('#dateFilter').val(savedDate);
+        } else {
+            // If no saved filter and no URL filter, show blank (all records)
+            $('#dateFilter').val('');
+        }
+
+        // Rest of your existing JavaScript code...
         // --- TOOLTIP INIT ---
         $('[data-bs-toggle="tooltip"]').tooltip();
 

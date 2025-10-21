@@ -10,7 +10,7 @@ if (!$conn) {
     die("Connection failed: " . mysqli_connect_error());
 }
 
-// --- Get latest date for default filter ---
+// --- Get latest date for reference ---
 $latestDate = '';
 $latestDateResult = $conn->query("SELECT MAX(`date`) AS latest_date FROM fgscosting");
 if ($latestDateResult && $latestDateRow = $latestDateResult->fetch_assoc()) {
@@ -20,32 +20,41 @@ if ($latestDateResult && $latestDateRow = $latestDateResult->fetch_assoc()) {
 // --- Fetch Data (filtered by date if provided) ---
 $costingDatafgs = [];
 $dateFilter = isset($_GET['dateFilter']) ? $_GET['dateFilter'] : '';
+
+// Build query based on date filter
 if (!empty($dateFilter)) {
-    // Ensure valid date
+    // Validate and sanitize date filter
     $d = DateTime::createFromFormat('Y-m-d', $dateFilter);
     if ($d && $d->format('Y-m-d') === $dateFilter) {
-        $dateFilter = $d->format('Y-m-d'); // safe
+        $dateFilter = $conn->real_escape_string($dateFilter);
+        
+        // Filter by selected date
+        $sql = "SELECT c.id, c.`date`, c.product_id, p.product_name, p.product_code, p.scientific_name,
+                   c.specification, c.size, c.buyingprice, c.volume, c.expectedyield,
+                   c.buyingcostandlogic, c.processingcharge, c.packagingcost, c.freightcost,
+                   c.estgrosstonet, c.type, p.category
+            FROM fgscosting c
+            JOIN products p ON c.product_id = p.id
+            WHERE DATE(c.`date`) = '$dateFilter'
+            ORDER BY c.`date` DESC, c.id ASC";
     } else {
-        $dateFilter = $latestDate; // fallback
+        // Invalid date format - show all records
+        $sql = "SELECT c.id, c.`date`, c.product_id, p.product_name, p.product_code, p.scientific_name,
+                   c.specification, c.size, c.buyingprice, c.volume, c.expectedyield,
+                   c.buyingcostandlogic, c.processingcharge, c.packagingcost, c.freightcost,
+                   c.estgrosstonet, c.type, p.category
+            FROM fgscosting c
+            JOIN products p ON c.product_id = p.id
+            ORDER BY c.`date` DESC, c.id ASC";
     }
-    // Filter by selected date
-    $sql = "SELECT c.id, c.`date`, c.product_id, p.product_name, p.product_code, p.scientific_name,
-               c.specification, c.size, c.buyingprice, c.volume, c.expectedyield,
-               c.buyingcostandlogic, c.processingcharge, c.packagingcost, c.freightcost,
-               c.estgrosstonet, c.type, p.category
-        FROM fgscosting c
-        JOIN products p ON c.product_id = p.id
-        WHERE DATE(c.`date`) = '$dateFilter'
-        ORDER BY c.`date` DESC, c.id ASC";
 } else {
-    // Default: latest date
+    // No date filter - show ALL records
     $sql = "SELECT c.id, c.`date`, c.product_id, p.product_name, p.product_code, p.scientific_name,
                c.specification, c.size, c.buyingprice, c.volume, c.expectedyield,
                c.buyingcostandlogic, c.processingcharge, c.packagingcost, c.freightcost,
                c.estgrosstonet, c.type, p.category
         FROM fgscosting c
         JOIN products p ON c.product_id = p.id
-        WHERE DATE(c.`date`) = (SELECT MAX(DATE(`date`)) FROM fgscosting)
         ORDER BY c.`date` DESC, c.id ASC";
 }
 
@@ -55,7 +64,6 @@ if ($result && $result->num_rows > 0) {
         $costingDatafgs[] = $row;
     }
 }
-
 
 // Fetch latest exchange rate
 $exchangeRateUsdtoLkr = 0;

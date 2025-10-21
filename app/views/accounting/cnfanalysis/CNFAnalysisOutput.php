@@ -101,6 +101,25 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\cnfanalysis
         </div>
     </div>
     
+    <!-- Table CNF Analysis-->
+    <div class="container-fluid mb-5">
+        <div class="table-responsive">
+            <table id="fgsCostingTable" class="table table-striped table-bordered" style="width:100%">
+                <thead>
+                    <tr>
+                        <th class="text-center">Product Code</th>
+                        <th class="text-center">Product Name</th>
+                        <th class="text-center">Scientific Name</th>
+                        <th class="text-center">Size Range</th>
+                        <th class="text-center">Specification</th>
+                        <th class="text-center">CNF</th>
+                        <th class="text-center">Average</th>
+                    </tr>
+                </thead>
+            </table>
+        </div>
+    </div>
+    
 </div>
 <script>
     function fillProductDetails() {
