@@ -27,19 +27,6 @@ while($row = $yearResult->fetch_assoc()) {
     $years[] = $row['year'];
 }
 
-// Get unique months for the current year
-$currentYear = date('Y');
-$monthQuery = "SELECT DISTINCT DATE_FORMAT(date, '%Y-%m') as month, 
-                      DATE_FORMAT(date, '%M %Y') as month_name 
-               FROM fgscosting 
-               WHERE YEAR(date) = '$currentYear' 
-               ORDER BY month DESC";
-$monthResult = $conn->query($monthQuery);
-$months = [];
-while($row = $monthResult->fetch_assoc()) {
-    $months[] = $row;
-}
-
 // Get all data for the table
 $dataQuery = "SELECT date, type, size, specification, buyingprice, volume,  
                      buyingcostandlogic, processingcharge, packagingcost, freightcost, estgrosstonet, expectedyield,
@@ -57,6 +44,7 @@ while($row = $dataResult->fetch_assoc()) {
 $monthlyData = [];
 $monthlyAverages = [];
 $yearlyProductData = []; // For summary tab
+$graphData = []; // For graph tab
 
 foreach($allData as $row) {
     $month = date('Y-m', strtotime($row['date']));
@@ -99,7 +87,7 @@ foreach($allData as $row) {
     $monthlyAverages[$month][$productKey]['count']++;
     
     // Store for yearly summary
-   $productSummaryKey = $row['product_code'] . '|' . $row['product_name'] . '|' . $row['size'] . '|' . $row['specification'];
+    $productSummaryKey = $row['product_code'] . '|' . $row['product_name'] . '|' . $row['size'] . '|' . $row['specification'];
     if (!isset($yearlyProductData[$year][$productSummaryKey])) {
         $yearlyProductData[$year][$productSummaryKey] = [
             'total_cnf' => 0,
@@ -120,6 +108,20 @@ foreach($allData as $row) {
     }
     $yearlyProductData[$year][$productSummaryKey]['monthly_data'][$month]['total_cnf'] += $cnfGbp;
     $yearlyProductData[$year][$productSummaryKey]['monthly_data'][$month]['count']++;
+    
+    // Store for graph data
+    $graphProductKey = $row['product_code'] . ' - ' . $row['product_name'];
+    if (!isset($graphData[$year][$graphProductKey])) {
+        $graphData[$year][$graphProductKey] = [];
+    }
+    if (!isset($graphData[$year][$graphProductKey][$month])) {
+        $graphData[$year][$graphProductKey][$month] = [
+            'total_cnf' => 0,
+            'count' => 0
+        ];
+    }
+    $graphData[$year][$graphProductKey][$month]['total_cnf'] += $cnfGbp;
+    $graphData[$year][$graphProductKey][$month]['count']++;
 }
 
 // Calculate averages per product per month
@@ -163,6 +165,50 @@ foreach($yearlyProductData as $year => $products) {
         }
     }
 }
+
+// Prepare graph data - calculate monthly averages for each product
+$graphMonthlyAverages = [];
+foreach($graphData as $year => $products) {
+    foreach($products as $productName => $months) {
+        foreach($months as $month => $data) {
+            if (!isset($graphMonthlyAverages[$year][$productName])) {
+                $graphMonthlyAverages[$year][$productName] = [];
+            }
+            $graphMonthlyAverages[$year][$productName][$month] = 
+                $data['total_cnf'] / $data['count'];
+        }
+    }
+}
+
+// Get unique products for graph dropdown
+$uniqueProducts = [];
+foreach($allData as $row) {
+    $productKey = $row['product_code'] . ' - ' . $row['product_name'];
+    if (!in_array($productKey, $uniqueProducts)) {
+        $uniqueProducts[] = $productKey;
+    }
+}
+sort($uniqueProducts);
+
+// Prepare graph data for JavaScript - limit to 5 products for clarity
+$graphProductsForJS = array_slice($uniqueProducts, 0, 5);
+
+// Get months for tabs - from the actual data we have
+$months = [];
+foreach(array_keys($monthlyData) as $monthKey) {
+    $monthName = date('F Y', strtotime($monthKey . '-01'));
+    $months[] = [
+        'month' => $monthKey,
+        'month_name' => $monthName
+    ];
+}
+
+// Sort months in descending order (newest first)
+usort($months, function($a, $b) {
+    return strcmp($b['month'], $a['month']);
+});
+
+$currentYear = date('Y');
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -178,6 +224,9 @@ foreach($yearlyProductData as $year => $products) {
 
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <!-- jQuery (must come before DataTables) -->
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
@@ -231,6 +280,17 @@ foreach($yearlyProductData as $year => $products) {
             max-height: 80vh;
             overflow-y: auto;
         }
+        .chart-container {
+            position: relative;
+            height: 60vh;
+            width: 100%;
+        }
+        .graph-controls {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
     </style>
 </head>
 <body>
@@ -256,17 +316,28 @@ foreach($yearlyProductData as $year => $products) {
         <!-- Monthly Tabs - Show latest month first -->
         <ul class="nav nav-tabs" id="monthTabs">
             <?php 
-            $firstMonth = true;
-            foreach($months as $month): 
+            if(!empty($months)) {
+                $firstMonth = true;
+                foreach($months as $month): 
+                    // Safe array access with fallbacks
+                    $monthName = isset($month['month_name']) ? $month['month_name'] : 'Unknown Month';
+                    $monthValue = isset($month['month']) ? $month['month'] : '';
+                    
+                    // Skip if we don't have valid data
+                    if (empty($monthValue)) continue;
             ?>
             <li class="nav-item">
-                <a class="nav-link <?php echo $firstMonth ? 'active' : ''; ?>" data-month="<?php echo $month['month']; ?>">
-                    <?php echo $month['month_name']; ?>
+                <a class="nav-link <?php echo $firstMonth ? 'active' : ''; ?>" data-month="<?php echo $monthValue; ?>">
+                    <?php echo $monthName; ?>
                 </a>
             </li>
             <?php 
-            $firstMonth = false;
-            endforeach; 
+                    $firstMonth = false;
+                endforeach; 
+            } else {
+                // Show a message if no months are available
+                echo '<li class="nav-item"><span class="nav-link text-muted">No monthly data available</span></li>';
+            }
             ?>
             <li class="nav-item">
                 <a class="nav-link text-danger" data-month="summary">Summary</a>
@@ -277,7 +348,7 @@ foreach($yearlyProductData as $year => $products) {
         </ul>
     </div>
     
-    <!-- CNF Analysis Tables -->
+    <!-- CNF Analysis Tables --> 
     <div class="container-fluid mb-5" id="cnfTablesContainer">
         <?php 
         $firstTable = true;
@@ -558,15 +629,53 @@ foreach($yearlyProductData as $year => $products) {
             </div>
         </div>
 
+        <!-- Graph Tab -->
         <div class="month-table d-none" data-month="graph">
-            <h1>Graph still Working</h1>
-        
+            <h4 class="text-primary mb-3">CNF Fluctuation Analysis</h4>
+            
+            <div class="graph-controls">
+                <div class="row">
+                    <div class="col-md-4">
+                        <label for="graphYearFilter" class="form-label fw-bold">Select Year:</label>
+                        <select id="graphYearFilter" class="form-select">
+                            <?php foreach($years as $year): ?>
+                            <option value="<?php echo $year; ?>" <?php echo $year == $currentYear ? 'selected' : ''; ?>>
+                                <?php echo $year; ?>
+                            </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="productFilter" class="form-label fw-bold">Select Product:</label>
+                        <select id="productFilter" class="form-select">
+                            <option value="all">All Products</option>
+                            <?php foreach($uniqueProducts as $product): ?>
+                            <option value="<?php echo $product; ?>"><?php echo $product; ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button type="button" id="updateGraph" class="btn btn-primary w-100">Update Graph</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="chart-container">
+                <canvas id="cnfChart"></canvas>
+            </div>
         </div>
     </div>
     
 </div>
 <script>
+    // Pass PHP data to JavaScript
+    const graphMonthlyAverages = <?php echo json_encode($graphMonthlyAverages); ?>;
+    const graphProducts = <?php echo json_encode($graphProductsForJS); ?>;
+    const allMonths = <?php echo json_encode(array_keys($monthlyData)); ?>;
+
     $(document).ready(function() {
+        let cnfChart = null;
+        
         // Simple tab functionality without DataTables complexity
         function showMonth(month) {
             // Hide all tables
@@ -578,7 +687,152 @@ foreach($yearlyProductData as $year => $products) {
             // Update active tab
             $('#monthTabs a').removeClass('active');
             $(`#monthTabs a[data-month="${month}"]`).addClass('active');
+            
+            // If graph tab is selected, initialize the chart
+            if (month === 'graph') {
+                initializeChart();
+            }
         }
+
+        // Initialize or update the chart
+        function initializeChart() {
+            const selectedYear = $('#graphYearFilter').val();
+            const selectedProduct = $('#productFilter').val();
+            
+            // Destroy existing chart if it exists
+            if (cnfChart) {
+                cnfChart.destroy();
+            }
+            
+            // Create new chart
+            const ctx = document.getElementById('cnfChart').getContext('2d');
+            
+            // Get data for the chart based on selections
+            const chartData = getChartData(selectedYear, selectedProduct);
+            
+            cnfChart = new Chart(ctx, {
+                type: 'line',
+                data: chartData,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: `CNF Fluctuation Analysis - ${selectedYear}`,
+                            font: {
+                                size: 16
+                            }
+                        },
+                        legend: {
+                            display: true,
+                            position: 'top'
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            callbacks: {
+                                label: function(context) {
+                                    return `${context.dataset.label}: £${context.parsed.y.toFixed(2)}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Months'
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'CNF Value (GBP)'
+                            },
+                            beginAtZero: false
+                        }
+                    },
+                    interaction: {
+                        mode: 'nearest',
+                        axis: 'x',
+                        intersect: false
+                    }
+                }
+            });
+        }
+        
+        // Get chart data based on year and product selection
+        function getChartData(year, product) {
+            const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            const datasets = [];
+            const colors = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF'];
+            
+            if (product === 'all') {
+                // Show limited products for clarity
+                graphProducts.forEach((productName, index) => {
+                    const data = allMonths.map(month => {
+                        // Get actual data from PHP array
+                        if (graphMonthlyAverages[year] && graphMonthlyAverages[year][productName] && graphMonthlyAverages[year][productName][month]) {
+                            return graphMonthlyAverages[year][productName][month];
+                        }
+                        return null; // Return null for missing data
+                    });
+                    
+                    datasets.push({
+                        label: productName,
+                        data: data,
+                        borderColor: colors[index % colors.length],
+                        backgroundColor: colors[index % colors.length] + '20',
+                        tension: 0.4,
+                        fill: false,
+                        spanGaps: true // Connect lines across null values
+                    });
+                });
+            } else {
+                // Show selected product
+                const data = allMonths.map(month => {
+                    // Get actual data from PHP array
+                    if (graphMonthlyAverages[year] && graphMonthlyAverages[year][product] && graphMonthlyAverages[year][product][month]) {
+                        return graphMonthlyAverages[year][product][month];
+                    }
+                    return null; // Return null for missing data
+                });
+                
+                datasets.push({
+                    label: product,
+                    data: data,
+                    borderColor: '#36A2EB',
+                    backgroundColor: '#36A2EB20',
+                    tension: 0.4,
+                    fill: false,
+                    spanGaps: true // Connect lines across null values
+                });
+            }
+            
+            // Format month labels
+            const monthLabels = allMonths.map(month => {
+                const monthNum = parseInt(month.split('-')[1]);
+                return monthNames[monthNum - 1] + ' ' + month.split('-')[0];
+            });
+            
+            return {
+                labels: monthLabels,
+                datasets: datasets
+            };
+        }
+        
+        // Update graph when button is clicked
+        $('#updateGraph').on('click', function() {
+            initializeChart();
+        });
+        
+        // Update graph when year filter changes (if on graph tab)
+        $('#graphYearFilter').on('change', function() {
+            if ($('.month-table[data-month="graph"]').is(':visible')) {
+                initializeChart();
+            }
+        });
 
         // Month tab click event
         $('#monthTabs').on('click', 'a', function(e) {
@@ -599,8 +853,8 @@ foreach($yearlyProductData as $year => $products) {
                 // Filter months by year
                 $('#monthTabs li').each(function() {
                     const tabMonth = $(this).find('a').data('month');
-                    if (tabMonth === 'summary') {
-                        $(this).show(); // Always show summary tab
+                    if (tabMonth === 'summary' || tabMonth === 'graph') {
+                        $(this).show(); // Always show summary and graph tabs
                     } else {
                         const tabYear = tabMonth.split('-')[0];
                         if (tabYear === selectedYear) {
@@ -615,8 +869,8 @@ foreach($yearlyProductData as $year => $products) {
                 $('.month-table').addClass('d-none');
                 $('.month-table').each(function() {
                     const tableMonth = $(this).data('month');
-                    if (tableMonth === 'summary') {
-                        $(this).removeClass('d-none'); // Always show summary
+                    if (tableMonth === 'summary' || tableMonth === 'graph') {
+                        $(this).removeClass('d-none'); // Always show summary and graph
                     } else {
                         const tableYear = tableMonth.split('-')[0];
                         if (tableYear === selectedYear) {
@@ -638,10 +892,6 @@ foreach($yearlyProductData as $year => $products) {
         $('#clearYearFilter').on('click', function() {
             $('#yearFilter').val('all').trigger('change');
         });
-
-        // Initialize with first month
-        const firstMonth = $('#monthTabs a.active').data('month');
-        showMonth(firstMonth);
 
         // Initialize simple DataTables without complex features
         $('.month-cnf-table').DataTable({
@@ -676,6 +926,14 @@ foreach($yearlyProductData as $year => $products) {
                 .tables({ visible: true, api: true })
                 .columns.adjust();
         });
+
+        // Initialize with first month or default to summary if no months
+        let initialMonth = 'summary';
+        const firstVisibleTab = $('#monthTabs a:visible').first();
+        if (firstVisibleTab.length) {
+            initialMonth = firstVisibleTab.data('month');
+        }
+        showMonth(initialMonth);
     });
 </script>
 </body>
