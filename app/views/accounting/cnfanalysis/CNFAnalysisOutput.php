@@ -1,214 +1,5 @@
 <?php
-$servername = "localhost";
-$username   = "root";
-$password   = "";
-$database   = "ydf-system";
-
-$conn = new mysqli($servername, $username, $password, $database);
-if ($conn->connect_error) {
-    die("Connection failed: " . $conn->connect_error);
-}
-
-// Get exchange rates (USD→GBP and USD→LKR)
-$exchangeRateUsdtoGbp = 0;
-$exchangeRateUsdtoLkr = 0;
-
-$rateResult = $conn->query("SELECT UsdToGbp, UsdToLkr FROM exchangeratefgs ORDER BY id DESC LIMIT 1");
-if ($rateResult && $rateRow = $rateResult->fetch_assoc()) {
-    $exchangeRateUsdtoGbp = $rateRow['UsdToGbp'];
-    $exchangeRateUsdtoLkr = $rateRow['UsdToLkr'];
-}
-
-// Get unique years from the database
-$yearQuery = "SELECT DISTINCT YEAR(date) as year FROM fgscosting ORDER BY year DESC";
-$yearResult = $conn->query($yearQuery);
-$years = [];
-while($row = $yearResult->fetch_assoc()) {
-    $years[] = $row['year'];
-}
-
-// Get all data for the table
-$dataQuery = "SELECT date, type, size, specification, buyingprice, volume,  
-                     buyingcostandlogic, processingcharge, packagingcost, freightcost, estgrosstonet, expectedyield,
-                     p.scientific_name, p.product_code, p.category, p.product_name
-              FROM fgscosting 
-              JOIN products p ON product_id=p.id
-              ORDER BY date DESC, product_code ASC";
-$dataResult = $conn->query($dataQuery);
-$allData = [];
-while($row = $dataResult->fetch_assoc()) {
-    $allData[] = $row;
-}
-
-// Organize data by month and date for the table structure
-$monthlyData = [];
-$monthlyAverages = [];
-$yearlyProductData = []; // For summary tab
-$graphData = []; // For graph tab
-
-foreach($allData as $row) {
-    $month = date('Y-m', strtotime($row['date']));
-    $date = date('Y-m-d', strtotime($row['date']));
-    $year = date('Y', strtotime($row['date']));
-    
-    // --- Correct CNF Formula (in GBP) ---
-    $yield = $row['expectedyield'] > 0 ? $row['expectedyield'] : 100;
-    $processedCost = ($row['buyingprice'] / ($yield / 100)); // LKR
-    $buyingTotal = $processedCost + $row['buyingcostandlogic']; // LKR
-    $usdBase = $exchangeRateUsdtoLkr > 0 ? $buyingTotal / $exchangeRateUsdtoLkr : 0; // USD
-
-    $freightForGross = $row['freightcost'] * (1 + ($row['estgrosstonet'] / 100)); // USD
-    $cnfUsd = $usdBase + $row['processingcharge'] + $row['packagingcost'] + $freightForGross; // USD
-    $cnfGbp = $exchangeRateUsdtoGbp > 0 ? $cnfUsd / $exchangeRateUsdtoGbp : 0; // GBP
-    
-    $row['cnf'] = $cnfGbp;
-
-    // Store for monthly tables
-    if (!isset($monthlyData[$month])) {
-        $monthlyData[$month] = [];
-        $monthlyAverages[$month] = [];
-    }
-    if (!isset($monthlyData[$month][$date])) {
-        $monthlyData[$month][$date] = [];
-    }
-    $monthlyData[$month][$date][] = $row;
-    
-    $productKey = $row['product_code'] . '|' . $date;
-    if (!isset($monthlyAverages[$month][$productKey])) {
-        $monthlyAverages[$month][$productKey] = [
-            'total_cnf' => 0,
-            'count' => 0,
-            'product_data' => $row,
-            'product_code' => $row['product_code'],
-            'date' => $date
-        ];
-    }
-    $monthlyAverages[$month][$productKey]['total_cnf'] += $cnfGbp;
-    $monthlyAverages[$month][$productKey]['count']++;
-    
-    // Store for yearly summary
-    $productSummaryKey = $row['product_code'] . '|' . $row['product_name'] . '|' . $row['size'] . '|' . $row['specification'];
-    if (!isset($yearlyProductData[$year][$productSummaryKey])) {
-        $yearlyProductData[$year][$productSummaryKey] = [
-            'total_cnf' => 0,
-            'count' => 0,
-            'monthly_data' => [],
-            'product_data' => $row
-        ];
-    }
-    $yearlyProductData[$year][$productSummaryKey]['total_cnf'] += $cnfGbp;
-    $yearlyProductData[$year][$productSummaryKey]['count']++;
-    
-    // Store monthly data for each product
-    if (!isset($yearlyProductData[$year][$productSummaryKey]['monthly_data'][$month])) {
-        $yearlyProductData[$year][$productSummaryKey]['monthly_data'][$month] = [
-            'total_cnf' => 0,
-            'count' => 0
-        ];
-    }
-    $yearlyProductData[$year][$productSummaryKey]['monthly_data'][$month]['total_cnf'] += $cnfGbp;
-    $yearlyProductData[$year][$productSummaryKey]['monthly_data'][$month]['count']++;
-    
-    // Store for graph data
-    $graphProductKey = $row['product_code'] . ' - ' . $row['product_name'];
-    if (!isset($graphData[$year][$graphProductKey])) {
-        $graphData[$year][$graphProductKey] = [];
-    }
-    if (!isset($graphData[$year][$graphProductKey][$month])) {
-        $graphData[$year][$graphProductKey][$month] = [
-            'total_cnf' => 0,
-            'count' => 0
-        ];
-    }
-    $graphData[$year][$graphProductKey][$month]['total_cnf'] += $cnfGbp;
-    $graphData[$year][$graphProductKey][$month]['count']++;
-}
-
-// Calculate averages per product per month
-$productAverages = [];
-foreach($monthlyAverages as $month => $dateProducts) {
-    foreach($dateProducts as $productKey => $data) {
-        $productCode = $data['product_code'];
-        if (!isset($productAverages[$month][$productCode])) {
-            $productAverages[$month][$productCode] = [
-                'total_cnf' => 0,
-                'count' => 0,
-                'product_data' => $data['product_data']
-            ];
-        }
-        $productAverages[$month][$productCode]['total_cnf'] += $data['total_cnf'];
-        $productAverages[$month][$productCode]['count'] += $data['count'];
-    }
-}
-
-// Calculate final averages for monthly tables
-foreach($productAverages as $month => $products) {
-    foreach($products as $productCode => $data) {
-        $productAverages[$month][$productCode]['average_cnf'] = 
-            $data['total_cnf'] / $data['count'];
-    }
-}
-
-// Calculate yearly averages for summary tab
-$yearlyAverages = [];
-foreach($yearlyProductData as $year => $products) {
-    foreach($products as $productKey => $data) {
-        $yearlyAverages[$year][$productKey] = [
-            'yearly_average' => $data['total_cnf'] / $data['count'],
-            'monthly_averages' => []
-        ];
-        
-        // Calculate monthly averages for each product
-        foreach($data['monthly_data'] as $month => $monthData) {
-            $yearlyAverages[$year][$productKey]['monthly_averages'][$month] = 
-                $monthData['total_cnf'] / $monthData['count'];
-        }
-    }
-}
-
-// Prepare graph data - calculate monthly averages for each product
-$graphMonthlyAverages = [];
-foreach($graphData as $year => $products) {
-    foreach($products as $productName => $months) {
-        foreach($months as $month => $data) {
-            if (!isset($graphMonthlyAverages[$year][$productName])) {
-                $graphMonthlyAverages[$year][$productName] = [];
-            }
-            $graphMonthlyAverages[$year][$productName][$month] = 
-                $data['total_cnf'] / $data['count'];
-        }
-    }
-}
-
-// Get unique products for graph dropdown
-$uniqueProducts = [];
-foreach($allData as $row) {
-    $productKey = $row['product_code'] . ' - ' . $row['product_name'];
-    if (!in_array($productKey, $uniqueProducts)) {
-        $uniqueProducts[] = $productKey;
-    }
-}
-sort($uniqueProducts);
-
-// Prepare graph data for JavaScript - limit to 5 products for clarity
-$graphProductsForJS = array_slice($uniqueProducts, 0, 5);
-
-// Get months for tabs - from the actual data we have
-$months = [];
-foreach(array_keys($monthlyData) as $monthKey) {
-    $monthName = date('F Y', strtotime($monthKey . '-01'));
-    $months[] = [
-        'month' => $monthKey,
-        'month_name' => $monthName
-    ];
-}
-
-// Sort months in descending order (newest first)
-usort($months, function($a, $b) {
-    return strcmp($b['month'], $a['month']);
-});
-
-$currentYear = date('Y');
+    include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\cnfanalysis\CNFAnalysisController.php');
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -291,6 +82,14 @@ $currentYear = date('Y');
             border-radius: 5px;
             margin-bottom: 20px;
         }
+        .summary-year-header {
+            background-color: #e9ecef;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            text-align: center;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
@@ -319,11 +118,8 @@ $currentYear = date('Y');
             if(!empty($months)) {
                 $firstMonth = true;
                 foreach($months as $month): 
-                    // Safe array access with fallbacks
                     $monthName = isset($month['month_name']) ? $month['month_name'] : 'Unknown Month';
                     $monthValue = isset($month['month']) ? $month['month'] : '';
-                    
-                    // Skip if we don't have valid data
                     if (empty($monthValue)) continue;
             ?>
             <li class="nav-item">
@@ -335,7 +131,6 @@ $currentYear = date('Y');
                     $firstMonth = false;
                 endforeach; 
             } else {
-                // Show a message if no months are available
                 echo '<li class="nav-item"><span class="nav-link text-muted">No monthly data available</span></li>';
             }
             ?>
@@ -348,16 +143,17 @@ $currentYear = date('Y');
         </ul>
     </div>
     
-    <!-- CNF Analysis Tables --> 
+    <!-- CNF Analysis Tables -->
     <div class="container-fluid mb-5" id="cnfTablesContainer">
         <?php 
         $firstTable = true;
         foreach($monthlyData as $month => $dates): 
             $monthName = date('F Y', strtotime($month . '-01'));
+            $monthYear = explode('-', $month)[0];
             $monthDates = array_keys($dates);
             sort($monthDates);
         ?>
-        <div class="month-table <?php echo $firstTable ? '' : 'd-none'; ?>" data-month="<?php echo $month; ?>">
+        <div class="month-table <?php echo $firstTable ? '' : 'd-none'; ?>" data-month="<?php echo $month; ?>" data-year="<?php echo $monthYear; ?>">
             <h4 class="text-primary mb-3"><?php echo $monthName; ?> - CNF Analysis</h4>
             <div class="table-responsive">
                 <table class="table table-bordered table-striped month-cnf-table" style="width:100%">
@@ -453,45 +249,6 @@ $currentYear = date('Y');
                             </td>
                         </tr>
                         <?php endforeach; ?>
-                        
-                        <!-- Monthly Summary Row -->
-                        <tfoot class="table-info">
-                            <td class="text-center fw-bold" colspan="5">Monthly Summary</td>
-                            <?php 
-                            // Calculate daily averages
-                            $dailyAverages = [];
-                            foreach($monthDates as $date) {
-                                $dailyTotal = 0;
-                                $dailyCount = 0;
-                                if (isset($dates[$date])) {
-                                    foreach($dates[$date] as $productData) {
-                                        $dailyTotal += $productData['cnf'];
-                                        $dailyCount++;
-                                    }
-                                }
-                                $dailyAverages[$date] = $dailyCount > 0 ? number_format($dailyTotal / $dailyCount, 2) : '-';
-                            }
-                            
-                            foreach($monthDates as $date): 
-                            ?>
-                            <td class="text-center cnf-cell fw-bold">
-                                <?php echo $dailyAverages[$date]; ?>
-                            </td>
-                            <?php endforeach; ?>
-                            <td class="text-center average-column cnf-cell fw-bold">
-                                <?php
-                                $monthlyTotal = 0;
-                                $monthlyCount = 0;
-                                if (isset($productAverages[$month])) {
-                                    foreach($productAverages[$month] as $productData) {
-                                        $monthlyTotal += $productData['average_cnf'];
-                                        $monthlyCount++;
-                                    }
-                                }
-                                echo $monthlyCount > 0 ? number_format($monthlyTotal / $monthlyCount, 2) : '-';
-                                ?>
-                            </td>
-                        </tfoot>
                     </tbody>
                 </table>
             </div>
@@ -501,130 +258,14 @@ $currentYear = date('Y');
         endforeach; 
         ?>
         
-        <!-- Summary Table -->
-        <div class="month-table d-none" data-month="summary">
-            <h4 class="text-primary mb-3">Yearly CNF Summary</h4>
+        <!-- Single Summary Table Container (rendered client-side based on yearFilter) -->
+        <div class="month-table d-none" data-month="summary" id="summaryTableContainer">
+            <div class="summary-year-header">
+                <h4 class="text-primary mb-0">Yearly CNF Summary</h4>
+            </div>
             <div class="summary-table-container">
-                <div class="table-responsive">
-                    <table class="table table-bordered table-striped summary-cnf-table" style="width:100%">
-                        <thead>
-                            <tr>
-                                <th class="text-center date-column product-details-column">Product Code</th>
-                                <th class="text-center date-column product-details-column">Product Name</th>
-                                <th class="text-center date-column product-details-column">Size</th>
-                                <th class="text-center date-column product-details-column">Specification</th>
-                                <!-- Monthly + Yearly columns follow -->
-
-                                <!-- Monthly Average Columns -->
-                                <?php 
-                                $allMonths = array_keys($monthlyData);
-                                sort($allMonths);
-                                foreach($allMonths as $month): 
-                                    $monthName = date('M Y', strtotime($month . '-01'));
-                                ?>
-                                <th class="text-center cnf-header cnf-cell" title="<?php echo $month; ?>">
-                                    <?php echo $monthName; ?>
-                                </th>
-                                <?php endforeach; ?>
-                                
-                                <!-- Yearly Average Column -->
-                                <th class="text-center yearly-average-column cnf-cell">Yearly Average</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php
-                            // Get all unique products across all data
-                            $allProducts = [];
-                            foreach($allData as $row) {
-                                $productKey = $row['product_code'] . '|' . $row['product_name'] . '|' . $row['size'] . '|' . $row['specification'];
-                                if (!isset($allProducts[$productKey])) {
-                                    $allProducts[$productKey] = $row;
-                                }
-                            }
-                            
-                            foreach($allProducts as $productKey => $product): 
-                                list($productCode, $productName, $size, $specification) = explode('|', $productKey, 4);
-                                $year = $currentYear; // Default to current year
-                                
-                                $yearlyAverage = isset($yearlyAverages[$year][$productKey]) ? 
-                                    number_format($yearlyAverages[$year][$productKey]['yearly_average'], 2) : '-';
-                            ?>
-                            <tr class="product-row">
-                                <!-- Product Detail Cells -->
-                                <td class="text-center">
-                                    <strong class="text-primary"><?php echo $productCode; ?></strong>
-                                </td>
-                                <td class="text-center">
-                                    <?php echo $productName; ?>
-                                </td>
-                                
-                                <td class="text-center">
-                                    <?php echo $size; ?>
-                                </td>
-                                <td class="text-center">
-                                    <?php echo $specification; ?>
-                                </td>
-                                
-                                <!-- Monthly Average Cells -->
-                                <?php foreach($allMonths as $month): ?>
-                                <td class="text-center cnf-cell">
-                                    <?php
-                                    $monthlyAvg = '-';
-                                    if (isset($yearlyAverages[$year][$productKey]['monthly_averages'][$month])) {
-                                        $monthlyAvg = number_format($yearlyAverages[$year][$productKey]['monthly_averages'][$month], 2);
-                                    } elseif (isset($productAverages[$month][$productCode])) {
-                                        $monthlyAvg = number_format($productAverages[$month][$productCode]['average_cnf'], 2);
-                                    }
-                                    echo $monthlyAvg;
-                                    ?>
-                                </td>
-                                <?php endforeach; ?>
-                                
-                                <!-- Yearly Average Cell -->
-                                <td class="text-center yearly-average-column cnf-cell fw-bold">
-                                    <?php echo $yearlyAverage; ?>
-                                </td>
-                            </tr>
-                            <?php endforeach; ?>
-                            
-                            <!-- Yearly Summary Row -->
-                            <tfoot class="table-info">
-                                <td class="text-center fw-bold" colspan="4">Yearly Summary</td>
-                                <?php 
-                                // Calculate monthly averages across all products
-                                foreach($allMonths as $month): 
-                                    $monthlyTotal = 0;
-                                    $monthlyCount = 0;
-                                    
-                                    if (isset($productAverages[$month])) {
-                                        foreach($productAverages[$month] as $productData) {
-                                            $monthlyTotal += $productData['average_cnf'];
-                                            $monthlyCount++;
-                                        }
-                                    }
-                                    
-                                    $monthlyAverage = $monthlyCount > 0 ? number_format($monthlyTotal / $monthlyCount, 2) : '-';
-                                ?>
-                                <td class="text-center cnf-cell fw-bold">
-                                    <?php echo $monthlyAverage; ?>
-                                </td>
-                                <?php endforeach; ?>
-                                <td class="text-center yearly-average-column cnf-cell fw-bold">
-                                    <?php
-                                    $yearlyTotal = 0;
-                                    $yearlyCount = 0;
-                                    if (isset($yearlyAverages[$year])) {
-                                        foreach($yearlyAverages[$year] as $productData) {
-                                            $yearlyTotal += $productData['yearly_average'];
-                                            $yearlyCount++;
-                                        }
-                                    }
-                                    echo $yearlyCount > 0 ? number_format($yearlyTotal / $yearlyCount, 2) : '-';
-                                    ?>
-                                </td>
-                            </tfoot>
-                        </tbody>
-                    </table>
+                <div class="table-responsive" id="summaryInnerContainer">
+                    <!-- Summary table HTML will be injected here by JavaScript -->
                 </div>
             </div>
         </div>
@@ -671,26 +312,122 @@ $currentYear = date('Y');
     // Pass PHP data to JavaScript
     const graphMonthlyAverages = <?php echo json_encode($graphMonthlyAverages); ?>;
     const graphProducts = <?php echo json_encode($graphProductsForJS); ?>;
-    const allMonths = <?php echo json_encode(array_keys($monthlyData)); ?>;
+    const allMonths = <?php echo json_encode(array_keys($monthlyData)); ?>; // e.g. ["2025-01","2025-02"]
+    const monthsMeta = <?php echo json_encode($months); ?>; // [{month: '2025-01', month_name: 'Jan 2025'}, ...]
+    const yearsList = <?php echo json_encode($years); ?>;
+    const yearlyAverages = <?php echo json_encode($yearlyAverages); ?>;
 
     $(document).ready(function() {
         let cnfChart = null;
-        
-        // Simple tab functionality without DataTables complexity
+        let summaryTableDT = null;
+
+        // Helper: show a month/table (smoothly)
         function showMonth(month) {
             // Hide all tables
             $('.month-table').addClass('d-none');
-            
             // Show selected month table
             $(`.month-table[data-month="${month}"]`).removeClass('d-none');
-            
             // Update active tab
             $('#monthTabs a').removeClass('active');
             $(`#monthTabs a[data-month="${month}"]`).addClass('active');
-            
+
             // If graph tab is selected, initialize the chart
             if (month === 'graph') {
                 initializeChart();
+            }
+
+            // Adjust DataTables if visible
+            setTimeout(function() {
+                if ($.fn.dataTable && $.fn.dataTable.tables) {
+                    $.fn.dataTable.tables({ visible: true, api: true }).columns.adjust();
+                }
+            }, 200);
+        }
+
+        // Render summary table for a specific year
+        function renderSummaryTable(year) {
+            const container = $('#summaryInnerContainer');
+            container.empty();
+
+            // Build month list for the selected year
+            const yearMonths = monthsMeta
+                .filter(m => m.month.startsWith(year + '-'))
+                .sort((a,b) => a.month.localeCompare(b.month)); // ascending
+
+            // Build table header
+            let html = '<table id="summaryTable" class="table table-bordered table-striped" style="width:100%">';
+            html += '<thead><tr>';
+            html += '<th class="text-center date-column product-details-column">Product Code</th>';
+            html += '<th class="text-center date-column product-details-column">Product Name</th>';
+            html += '<th class="text-center date-column product-details-column">Size</th>';
+            html += '<th class="text-center date-column product-details-column">Specification</th>';
+
+            // monthly columns
+            yearMonths.forEach(m => {
+                const shortName = new Date(m.month + '-01').toLocaleString('en-GB', { month: 'short', year: 'numeric' });
+                html += `<th class="text-center cnf-header cnf-cell" title="${m.month}">${shortName}</th>`;
+            });
+
+            html += '<th class="text-center yearly-average-column cnf-cell">Yearly Average</th>';
+            html += '</tr></thead>';
+
+            html += '<tbody>';
+
+            // If no data for year, show message
+            if (!yearlyAverages || !yearlyAverages[year] || Object.keys(yearlyAverages[year]).length === 0) {
+                html += `<tr><td colspan="${4 + yearMonths.length + 1}" class="text-center text-muted">No data available for ${year}</td></tr>`;
+            } else {
+                Object.keys(yearlyAverages[year]).forEach(productKey => {
+                    const product = yearlyAverages[year][productKey];
+                    // productKey format: product_code|product_name|size|specification
+                    const parts = productKey.split('|');
+                    const pCode = parts[0] || '';
+                    const pName = parts[1] || '';
+                    const pSize = parts[2] || '';
+                    const pSpec = parts[3] || '';
+
+                    html += '<tr class="product-row">';
+                    html += `<td class="text-center"><strong class="text-primary">${pCode}</strong></td>`;
+                    html += `<td class="text-center">${pName}</td>`;
+                    html += `<td class="text-center">${pSize}</td>`;
+                    html += `<td class="text-center">${pSpec}</td>`;
+
+                    // monthly values
+                    yearMonths.forEach(m => {
+                        const monthKey = m.month;
+                        let monthlyAvg = '-';
+                        if (product.monthly_averages && product.monthly_averages[monthKey] !== undefined) {
+                            monthlyAvg = Number(product.monthly_averages[monthKey]).toFixed(2);
+                        }
+                        html += `<td class="text-center cnf-cell">${monthlyAvg}</td>`;
+                    });
+
+                    // yearly average
+                    const yearlyAvg = product.yearly_average ? Number(product.yearly_average).toFixed(2) : '-';
+                    html += `<td class="text-center yearly-average-column cnf-cell fw-bold">${yearlyAvg}</td>`;
+
+                    html += '</tr>';
+                });
+            }
+
+            html += '</tbody></table>';
+
+            container.html(html);
+
+            // Initialize DataTable for the dynamically created summary table
+            if ($.fn.dataTable) {
+                if (summaryTableDT) {
+                    try { summaryTableDT.destroy(); } catch(e) {}
+                }
+                summaryTableDT = $('#summaryTable').DataTable({
+                    paging: false,
+                    searching: true,
+                    ordering: true,
+                    info: false,
+                    autoWidth: false,
+                    scrollX: true,
+                    dom: '<"row"<"col-sm-12"f>>rtip'
+                });
             }
         }
 
@@ -720,44 +457,24 @@ $currentYear = date('Y');
                         title: {
                             display: true,
                             text: `CNF Fluctuation Analysis - ${selectedYear}`,
-                            font: {
-                                size: 16
-                            }
+                            font: { size: 16 }
                         },
-                        legend: {
-                            display: true,
-                            position: 'top'
-                        },
+                        legend: { display: true, position: 'top' },
                         tooltip: {
                             mode: 'index',
                             intersect: false,
                             callbacks: {
                                 label: function(context) {
-                                    return `${context.dataset.label}: £${context.parsed.y.toFixed(2)}`;
+                                    return `${context.dataset.label}: £${context.parsed.y ? context.parsed.y.toFixed(2) : '0.00'}`;
                                 }
                             }
                         }
                     },
                     scales: {
-                        x: {
-                            title: {
-                                display: true,
-                                text: 'Months'
-                            }
-                        },
-                        y: {
-                            title: {
-                                display: true,
-                                text: 'CNF Value (GBP)'
-                            },
-                            beginAtZero: false
-                        }
+                        x: { title: { display: true, text: 'Months' } },
+                        y: { title: { display: true, text: 'CNF Value (GBP)' }, beginAtZero: false }
                     },
-                    interaction: {
-                        mode: 'nearest',
-                        axis: 'x',
-                        intersect: false
-                    }
+                    interaction: { mode: 'nearest', axis: 'x', intersect: false }
                 }
             });
         }
@@ -767,18 +484,18 @@ $currentYear = date('Y');
             const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
             const datasets = [];
             const colors = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF'];
-            
+
+            // Build a list of months for the entire dataset, but only show months present in allMonths
+            const monthsForYear = monthsMeta.filter(m => m.month.startsWith(year + '-')).map(m => m.month);
+
             if (product === 'all') {
-                // Show limited products for clarity
                 graphProducts.forEach((productName, index) => {
-                    const data = allMonths.map(month => {
-                        // Get actual data from PHP array
+                    const data = monthsForYear.map(month => {
                         if (graphMonthlyAverages[year] && graphMonthlyAverages[year][productName] && graphMonthlyAverages[year][productName][month]) {
                             return graphMonthlyAverages[year][productName][month];
                         }
-                        return null; // Return null for missing data
+                        return null;
                     });
-                    
                     datasets.push({
                         label: productName,
                         data: data,
@@ -786,19 +503,16 @@ $currentYear = date('Y');
                         backgroundColor: colors[index % colors.length] + '20',
                         tension: 0.4,
                         fill: false,
-                        spanGaps: true // Connect lines across null values
+                        spanGaps: true
                     });
                 });
             } else {
-                // Show selected product
-                const data = allMonths.map(month => {
-                    // Get actual data from PHP array
+                const data = monthsForYear.map(month => {
                     if (graphMonthlyAverages[year] && graphMonthlyAverages[year][product] && graphMonthlyAverages[year][product][month]) {
                         return graphMonthlyAverages[year][product][month];
                     }
-                    return null; // Return null for missing data
+                    return null;
                 });
-                
                 datasets.push({
                     label: product,
                     data: data,
@@ -806,20 +520,19 @@ $currentYear = date('Y');
                     backgroundColor: '#36A2EB20',
                     tension: 0.4,
                     fill: false,
-                    spanGaps: true // Connect lines across null values
+                    spanGaps: true
                 });
             }
-            
-            // Format month labels
-            const monthLabels = allMonths.map(month => {
-                const monthNum = parseInt(month.split('-')[1]);
-                return monthNames[monthNum - 1] + ' ' + month.split('-')[0];
-            });
-            
-            return {
-                labels: monthLabels,
-                datasets: datasets
-            };
+
+            const monthLabels = monthsMeta
+                .filter(m => m.month.startsWith(year + '-'))
+                .map(m => {
+                    const parts = m.month.split('-');
+                    const monthNum = parseInt(parts[1]);
+                    return monthNames[monthNum - 1] + ' ' + parts[0];
+                });
+
+            return { labels: monthLabels, datasets: datasets };
         }
         
         // Update graph when button is clicked
@@ -841,7 +554,7 @@ $currentYear = date('Y');
             showMonth(selectedMonth);
         });
 
-        // Year filter functionality
+        // Year filter functionality - now filters tabs and summary content strictly by year
         $('#yearFilter').on('change', function() {
             const selectedYear = $(this).val();
 
@@ -849,13 +562,16 @@ $currentYear = date('Y');
                 // Show all months and tabs
                 $('#monthTabs li').show();
                 $('.month-table').removeClass('d-none');
+                // Render summary for the first available year in the list
+                const firstYear = yearsList.length ? yearsList[0] : new Date().getFullYear();
+                renderSummaryTable(firstYear);
             } else {
-                // Filter months by year
+                // Filter month tabs by selected year
                 $('#monthTabs li').each(function() {
                     const tabMonth = $(this).find('a').data('month');
                     if (tabMonth === 'summary' || tabMonth === 'graph') {
-                        $(this).show(); // Always show summary and graph tabs
-                    } else {
+                        $(this).show();
+                    } else if (typeof tabMonth === 'string') {
                         const tabYear = tabMonth.split('-')[0];
                         if (tabYear === selectedYear) {
                             $(this).show();
@@ -864,20 +580,26 @@ $currentYear = date('Y');
                         }
                     }
                 });
-                
+
                 // Show tables for selected year only
                 $('.month-table').addClass('d-none');
                 $('.month-table').each(function() {
                     const tableMonth = $(this).data('month');
-                    if (tableMonth === 'summary' || tableMonth === 'graph') {
-                        $(this).removeClass('d-none'); // Always show summary and graph
+                    const tableYear = $(this).data('year');
+
+                    if (tableMonth === 'summary') {
+                        $(this).removeClass('d-none');
+                    } else if (tableMonth === 'graph') {
+                        $(this).removeClass('d-none');
                     } else {
-                        const tableYear = tableMonth.split('-')[0];
-                        if (tableYear === selectedYear) {
+                        if (String(tableYear) === String(selectedYear)) {
                             $(this).removeClass('d-none');
                         }
                     }
                 });
+
+                // Render summary for the selected year
+                renderSummaryTable(selectedYear);
             }
 
             // Activate first visible tab
@@ -893,7 +615,7 @@ $currentYear = date('Y');
             $('#yearFilter').val('all').trigger('change');
         });
 
-        // Initialize simple DataTables without complex features
+        // Initialize DataTables for month tables
         $('.month-cnf-table').DataTable({
             paging: false,
             searching: true,
@@ -904,28 +626,9 @@ $currentYear = date('Y');
             dom: '<"row"<"col-sm-12"f>>rtip'
         });
         
-        // Initialize summary table DataTable
-        $('.summary-cnf-table').DataTable({
-            paging: false,
-            searching: true,
-            ordering: true,
-            info: false,
-            autoWidth: false,
-            scrollX: true,
-            dom: '<"row"<"col-sm-12"f>>rtip'
-        });
-
-        // Fix DataTable width issue when switching tabs
-        $('#monthTabs').on('click', 'a', function (e) {
-            e.preventDefault();
-            const selectedMonth = $(this).data('month');
-            showMonth(selectedMonth);
-
-            // Recalculate DataTables column widths when showing the table
-            $.fn.dataTable
-                .tables({ visible: true, api: true })
-                .columns.adjust();
-        });
+        // Initialize summary table with currently selected year
+        const initYear = $('#yearFilter').val() === 'all' ? (yearsList.length ? yearsList[0] : new Date().getFullYear()) : $('#yearFilter').val();
+        renderSummaryTable(initYear);
 
         // Initialize with first month or default to summary if no months
         let initialMonth = 'summary';

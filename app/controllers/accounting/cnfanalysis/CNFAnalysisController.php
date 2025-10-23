@@ -43,8 +43,8 @@ while($row = $dataResult->fetch_assoc()) {
 // Organize data by month and date for the table structure
 $monthlyData = [];
 $monthlyAverages = [];
-$yearlyProductData = []; // For summary tab
-$graphData = []; // For graph tab
+$yearlyProductData = []; // For summary
+$graphData = []; // For graph
 
 foreach($allData as $row) {
     $month = date('Y-m', strtotime($row['date']));
@@ -62,17 +62,21 @@ foreach($allData as $row) {
     $cnfGbp = $exchangeRateUsdtoGbp > 0 ? $cnfUsd / $exchangeRateUsdtoGbp : 0; // GBP
     
     $row['cnf'] = $cnfGbp;
+    $row['year'] = $year; // Add year to row for filtering
 
     // Store for monthly tables
     if (!isset($monthlyData[$month])) {
         $monthlyData[$month] = [];
-        $monthlyAverages[$month] = [];
     }
     if (!isset($monthlyData[$month][$date])) {
         $monthlyData[$month][$date] = [];
     }
     $monthlyData[$month][$date][] = $row;
     
+    // Store for monthly averages
+    if (!isset($monthlyAverages[$month])) {
+        $monthlyAverages[$month] = [];
+    }
     $productKey = $row['product_code'] . '|' . $date;
     if (!isset($monthlyAverages[$month][$productKey])) {
         $monthlyAverages[$month][$productKey] = [
@@ -80,7 +84,8 @@ foreach($allData as $row) {
             'count' => 0,
             'product_data' => $row,
             'product_code' => $row['product_code'],
-            'date' => $date
+            'date' => $date,
+            'year' => $year
         ];
     }
     $monthlyAverages[$month][$productKey]['total_cnf'] += $cnfGbp;
@@ -88,6 +93,9 @@ foreach($allData as $row) {
     
     // Store for yearly summary
     $productSummaryKey = $row['product_code'] . '|' . $row['product_name'] . '|' . $row['size'] . '|' . $row['specification'];
+    if (!isset($yearlyProductData[$year])) {
+        $yearlyProductData[$year] = [];
+    }
     if (!isset($yearlyProductData[$year][$productSummaryKey])) {
         $yearlyProductData[$year][$productSummaryKey] = [
             'total_cnf' => 0,
@@ -110,6 +118,9 @@ foreach($allData as $row) {
     $yearlyProductData[$year][$productSummaryKey]['monthly_data'][$month]['count']++;
     
     // Store for graph data
+    if (!isset($graphData[$year])) {
+        $graphData[$year] = [];
+    }
     $graphProductKey = $row['product_code'] . ' - ' . $row['product_name'];
     if (!isset($graphData[$year][$graphProductKey])) {
         $graphData[$year][$graphProductKey] = [];
@@ -129,11 +140,16 @@ $productAverages = [];
 foreach($monthlyAverages as $month => $dateProducts) {
     foreach($dateProducts as $productKey => $data) {
         $productCode = $data['product_code'];
+        $year = $data['year'];
+        if (!isset($productAverages[$month])) {
+            $productAverages[$month] = [];
+        }
         if (!isset($productAverages[$month][$productCode])) {
             $productAverages[$month][$productCode] = [
                 'total_cnf' => 0,
                 'count' => 0,
-                'product_data' => $data['product_data']
+                'product_data' => $data['product_data'],
+                'year' => $year
             ];
         }
         $productAverages[$month][$productCode]['total_cnf'] += $data['total_cnf'];
@@ -153,6 +169,9 @@ foreach($productAverages as $month => $products) {
 $yearlyAverages = [];
 foreach($yearlyProductData as $year => $products) {
     foreach($products as $productKey => $data) {
+        if (!isset($yearlyAverages[$year])) {
+            $yearlyAverages[$year] = [];
+        }
         $yearlyAverages[$year][$productKey] = [
             'yearly_average' => $data['total_cnf'] / $data['count'],
             'monthly_averages' => []
@@ -171,6 +190,9 @@ $graphMonthlyAverages = [];
 foreach($graphData as $year => $products) {
     foreach($products as $productName => $months) {
         foreach($months as $month => $data) {
+            if (!isset($graphMonthlyAverages[$year])) {
+                $graphMonthlyAverages[$year] = [];
+            }
             if (!isset($graphMonthlyAverages[$year][$productName])) {
                 $graphMonthlyAverages[$year][$productName] = [];
             }

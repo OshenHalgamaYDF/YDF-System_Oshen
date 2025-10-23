@@ -13,6 +13,8 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\YDFcostinga
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
     <!-- DataTables CSS -->
     <link href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css" rel="stylesheet">
     <!-- jQuery -->
@@ -231,6 +233,15 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\YDFcostinga
             </button>
 
             <button type="button" class="btn btn-primary px-4" data-bs-toggle="modal" data-bs-target="#costingModal" id="addCostingBtn"><i class="fa fa-plus"></i> Costing Record Input</button>
+            <button 
+                type="button" 
+                class="btn btn-danger px-4 py-2 shadow-lg fw-bold text-uppercase" 
+                style="letter-spacing: 1px; transition: all 0.3s ease;"
+                onclick="window.location.href='price_list_pdf.php';"
+                
+            >
+                <i class="bi bi-file-earmark-pdf-fill me-2"></i> Generate PDF
+            </button>
         </div>
         <!-- CostingEnter Modal-->
         <div class="modal fade" id="costingModal" tabindex="-1" aria-labelledby="costingModalLabel" aria-hidden="true">
