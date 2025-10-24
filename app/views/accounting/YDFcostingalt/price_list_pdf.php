@@ -11,7 +11,7 @@ if ($conn->connect_error) die("Connection failed: " . $conn->connect_error);
 
 // --- Fetch Data ---
 $sql = "SELECT c.id, p.product_code, p.product_name, p.scientific_name, 
-               c.volume, c.specification, c.`500grounded_MCO`
+               c.volume, c.specification, c.`500groundedprice`, c.sizerange
         FROM ydfcosting c
         JOIN products p ON c.product_id = p.id
         ORDER BY c.id ASC";
@@ -20,38 +20,54 @@ $costingData = $result->fetch_all(MYSQLI_ASSOC);
 
 // --- PDF Class ---
 class PDF extends FPDF {
-    function Header() {
-        // Main header
-        // === Centered Logo ===
-        $logoPath = 'C:\xampp\htdocs\ydf-system-oshen\app\views\accounting\YDFcostingalt\1720758043421.jpg';
-        $logoWidth = 40; // width in mm (adjust as needed)
-        $pageWidth = $this->GetPageWidth();
-        $x = ($pageWidth - $logoWidth) / 2; // Center horizontally
 
-        // Place image centered near top
-        $this->Image($logoPath, $x, 3, $logoWidth);
-        $this->Ln(30); // Space below image
-
-        $this->SetFont('Arial', 'B', 12);
-        $this->Cell(0, 6, 'Vacuum Product Price List - Price to USA (MCO, MIA and ATL Airport) -300Kg+', 0, 1, 'C');
-        $this->Ln(4);
-
-        // Section title
-        $this->SetFont('Arial', 'BU', 11);
-        $this->Cell(0, 6, 'Product Varieties', 0, 1, 'C');
-        $this->Ln(4);
-    }
 
     function ImprovedTable($header, $data) {
         // --- Column widths ---
         $w = [28, 30, 36, 28, 50, 22];
         $lineHeight = 5;
 
+        $totalWidth = array_sum($w); // total table width
+
+        // --- Add Logo Row ---
+        $logoPath = 'C:\xampp\htdocs\ydf-system-oshen\app\views\accounting\YDFcostingalt\logocopy1.jpg';
+        $logoWidth = 25;   // Adjust image width
+        $logoHeight = 20;  // Adjust image height
+
+        // Save starting position
+        $xStart = $this->GetX();
+        $yStart = $this->GetY();
+
+        // Draw a cell with border for the logo row
+        $this->Cell($totalWidth, $logoHeight + 4, '', 1, 1, 'C'); // empty bordered cell
+
+        // Calculate X position to center the image
+        $pageWidth = $this->GetPageWidth();
+        $xImage = $xStart + ($totalWidth - $logoWidth) / 2;
+        $yImage = $yStart + 2; // a bit of top padding inside the cell
+
+        // Place image centered inside the bordered cell
+        $this->Image($logoPath, $xImage, $yImage, $logoWidth, $logoHeight);
+
+        $this->SetFont('Arial', 'B', 11);
+        $this->SetFillColor(158, 153, 153);
+
+        $totalWidth = array_sum($w); // total table width   
+        $this->Cell($totalWidth, 8, 'Vacuum Product Price List - Price to USA (MCO, MIA and ATL Airport) - 300Kg+', 1, 1, 'C',true);
+
+        // --- Section Title ---
+        $this->SetFont('Arial', 'B', 11);
+        $this->SetFillColor(240, 132, 29);
+
+        $this->Cell($totalWidth, 6, 'Product Varieties', 1, 1, 'C', true);
+
         // --- Table Header ---
         $this->SetFont('Arial', 'B', 9);
-        $this->SetFillColor(240, 240, 240);
-        $this->SetDrawColor(180, 180, 180);
-        $this->SetLineWidth(0.2);
+        $this->SetFillColor(3, 90, 168); // Light gray for header
+        $this->SetDrawColor(41, 40, 40); // Darker gray for borders
+        $this->SetLineWidth(0.3);
+        
+        // Draw header cells with borders
         for ($i = 0; $i < count($header); $i++) {
             $this->Cell($w[$i], 8, $header[$i], 1, 0, 'C', true);
         }
@@ -59,7 +75,8 @@ class PDF extends FPDF {
 
         // --- Table Data ---
         $this->SetFont('Arial', '', 8);
-        $fill = false;
+        $this->SetDrawColor(41, 40, 40); // Consistent border color
+        $this->SetLineWidth(0.2);
 
         foreach ($data as $row) {
             // Calculate row height (based on max text lines per cell)
@@ -67,9 +84,9 @@ class PDF extends FPDF {
                 $this->NbLines($w[0], $row['product_code']),
                 $this->NbLines($w[1], $row['product_name']),
                 $this->NbLines($w[2], $row['scientific_name']),
-                $this->NbLines($w[3], $row['volume']),
+                $this->NbLines($w[3], $row['sizerange']),
                 $this->NbLines($w[4], $row['specification']),
-                $this->NbLines($w[5], '$' . number_format($row['500grounded_MCO'], 2))
+                $this->NbLines($w[5], '$' . number_format($row['500groundedprice'], 2))
             ];
             $maxLines = max($lines);
             $h = $lineHeight * $maxLines;
@@ -77,8 +94,9 @@ class PDF extends FPDF {
             // --- Page break check ---
             if ($this->GetY() + $h > $this->PageBreakTrigger) {
                 $this->AddPage();
+                // Redraw header on new page
                 $this->SetFont('Arial', 'B', 9);
-                $this->SetFillColor(240, 240, 240);
+                $this->SetFillColor(220, 220, 220);
                 for ($i = 0; $i < count($header); $i++) {
                     $this->Cell($w[$i], 8, $header[$i], 1, 0, 'C', true);
                 }
@@ -87,9 +105,13 @@ class PDF extends FPDF {
             }
 
             // --- Alternating row color ---
-            if ($fill) $this->SetFillColor(250, 250, 250);
-            else $this->SetFillColor(255, 255, 255);
-            $fill = !$fill;
+            static $rowCount = 0;
+            if ($rowCount % 2 == 0) {
+                $this->SetFillColor(255, 255, 255); // White
+            } else {
+                $this->SetFillColor(245, 245, 245); // Very light gray
+            }
+            $rowCount++;
 
             // --- Save starting X & Y ---
             $xStart = $this->GetX();
@@ -100,22 +122,23 @@ class PDF extends FPDF {
                 $row['product_code'],
                 $row['product_name'],
                 $row['scientific_name'],
-                $row['volume'],
+                $row['sizerange'],
                 $row['specification'],
-                '$' . number_format($row['500grounded_MCO'], 2)
+                '$' . number_format($row['500groundedprice'], 2)
             ];
 
-            // --- Draw cells with aligned borders ---
+            // --- Draw complete row with borders ---
             for ($i = 0; $i < count($cells); $i++) {
                 $x = $this->GetX();
                 $y = $this->GetY();
 
-                // Draw cell border manually for perfect height
-                $this->Rect($x, $y, $w[$i], $h);
-
-                // Print text
-                $this->MultiCell($w[$i], $lineHeight, $cells[$i], 0, 'L', $fill);
-
+                // Draw cell with border and fill
+                $this->Cell($w[$i], $h, '', 1, 0, '', true); // Empty cell with border and fill
+                
+                // Print text on top of the cell
+                $this->SetXY($x, $y);
+                $this->MultiCell($w[$i], $lineHeight, $cells[$i], 0, 'C');
+                
                 // Move cursor to right edge of cell
                 $this->SetXY($x + $w[$i], $y);
             }
@@ -123,6 +146,13 @@ class PDF extends FPDF {
             // Move to next line
             $this->SetXY($xStart, $yStart + $h);
         }
+        // --- Final Row (like a footer row in table) ---
+        $this->SetFont('Arial', 'I', 6);
+        $this->SetFillColor(204, 134, 65); // Same color as header (or change)
+
+        $totalWidth = array_sum($w); // total table width
+        $this->Cell($totalWidth, 6, 'No. 170, Orex City Shopping Complex, Ekala, Ja Ela, Sri Lanka', 1, 1, 'C', true);
+        $this->Cell($totalWidth, 6, 'Web: www.ydf.lk | Mail: info@ydf.lk | Tel: +94 (0)76 081 8181 | Mob: +94 (0)77 296 2277', 1, 1, 'C',true);
     }
 
     function NbLines($w, $txt) {
@@ -153,20 +183,14 @@ class PDF extends FPDF {
         }
         return $nl;
     }
-    // function Footer() {
-    // }
 }
 
 // --- Generate PDF ---
 $pdf = new PDF();
 $pdf->AddPage();
 
-$header = ['Product Code', 'Product Name', 'Scientific Name', 'Size Range(Kg)', 'Specification', '500g Price($)'];
+$header = ['Product Code', 'Product Name', 'Scientific Name', 'Size Range', 'Specification', '500g Price($)'];
 $pdf->ImprovedTable($header, $costingData);
-
-$pdf->SetFont('Arial', '', 9);
-$pdf->Cell(0, 6, 'No. 170, Orex City Shopping Complex, Ekala, Ja ela, Sri Lanka', 0, 1, 'C');
-$pdf->Cell(0, 6, 'Web: www.ydf.lk | Mail: info@ydf.lk | Tel: +94 (0)76 081 8181 | Mob: +94 (0)77 296 2277', 0, 1, 'C');
 
 $pdf->Output('I', 'Price_List_to_MCO_' . date('d.m.Y') . '_300Kg+.pdf');
 $conn->close();

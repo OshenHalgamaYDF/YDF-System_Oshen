@@ -282,10 +282,15 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\YDFcostinga
                                     <label for="scientificName" class="form-label">Scientific Name: </label>
                                     <input type="text" id="scientificName" name="scientific_name" class="form-control" readonly>
                                 </div>
-                                <div class="col-md-12">
+                                <div class="col-md-6">
                                     <label for="specification" class="form-label">Specification: </label>
                                     <input type="text" id="specification" name="specification" class="form-control" required>
                                     <div class="invalid-feedback">Please enter a specification.</div>   
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="sizerange" class="form-label">Size Range: </label>
+                                    <input type="text" id="sizerange" name="sizerange" class="form-control" required>
+                                    <div class="invalid-feedback">Please enter a Size Range.</div>   
                                 </div>
                                 <div class="col-md-4">
                                     <label for="buyingPrice" class="form-label">Buying Price: </label>
@@ -426,6 +431,7 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\YDFcostinga
                         <th class="sticky-col text-center">Product Code</th>
                         <th class="sticky-col-2 text-center">Product Name</th>
                         <th class="sticky-col-3 text-center">Specification</th>
+                        <th class="text-center">Size Range</th>
                         <th class="text-center">Buying Price</th>
                         <th class="text-center">Volume</th>
                         <th class="text-center">Expected Yield</th>
@@ -454,6 +460,7 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\YDFcostinga
                         <td class="sticky-col"><?= htmlspecialchars($row['product_code']); ?></td>
                         <td class="sticky-col-2"><?= htmlspecialchars($row['product_name']); ?></td>
                         <td class="sticky-col-3"><?= htmlspecialchars($row['specification']); ?></td>
+                        <td><?= htmlspecialchars($row['sizerange']); ?></td>
                         <td>LKR.<?= htmlspecialchars($row['buyingprice']); ?></td>
                         <td><?= htmlspecialchars($row['volume']); ?></td>
                         <td><?= htmlspecialchars($row['expectedyield'], ENT_QUOTES, 'UTF-8'); ?>%</td>
@@ -525,6 +532,7 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\YDFcostinga
                                     data-product-code="<?= htmlspecialchars($row['product_code']) ?>"
                                     data-scientific-name="<?= htmlspecialchars($row['scientific_name']) ?>"
                                     data-specification="<?= htmlspecialchars($row['specification']) ?>"
+                                    data-sizerange="<?= htmlspecialchars($row['sizerange']) ?>"
                                     data-buyingprice="<?= $row['buyingprice'] ?>"
                                     data-volume="<?= $row['volume'] ?>"
                                     data-expectedyield="<?= $row['expectedyield'] ?>"
@@ -608,6 +616,7 @@ $('.edit-btn').on('click', function() {
     $('#productCode').val($(this).data('product-code'));
     $('#scientificName').val($(this).data('scientific-name'));
     $('#specification').val($(this).data('specification'));
+    $('#sizerange').val($(this).data('sizerange'));
     $('#buyingPrice').val($(this).data('buyingprice'));
     $('#volume').val($(this).data('volume'));
     $('#expectedYield').val($(this).data('expectedyield'));
