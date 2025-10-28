@@ -115,6 +115,65 @@
     </style>
 </head>
 <body>
-    
+    <div class="container-fluid mt-4">
+        <h1 class="text-center text-primary mb-4"><b>YDF Outstanding Statement</b></h1>
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#YDFOutstandingModal" id="addNewBtn">
+                <i class="fas fa-plus"></i> Enter Outstanding Values
+        </button>
+
+        <!-- Modal for YDF Outstanding Statement Input -->
+        <div class="modal fade" id="YDFOutstandingModal" tabindex="-1" aria-labelledby="YDFOutstandingModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="YDFOutstandingModalLabel">YDF Outstanding Statement Input</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="ydfOutstandingForm" method="post" action="">
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label for="ydfDate" class="form-label">Date</label>
+                                    <input type="text" class="form-control" id="ydfDate" name="ydfDate" required>
+                                    <div class="invalid-feedback">Please enter the Date.</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="ydfActivity" class="form-label">Activity</label>
+                                    <input type="text" class="form-control" id="ydfActivity" name="ydfActivity" required>
+                                    <div class="invalid-feedback">Please enter the Activity.</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="ydfReference" class="form-label">Reference</label>
+                                    <input type="text" class="form-control" id="ydfReference" name="ydfReference" required>
+                                    <div class="invalid-feedback">Please enter the Reference.</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="ydfCustomerName" class="form-label">Customer Name</label>
+                                    <input type="text" class="form-control" id="ydfCustomerName" name="ydfCustomerName" required>
+                                    <div class="invalid-feedback">Please enter the Customer Name.</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <select class="form-select" id="ydftype" name="ydftype" required>
+                                        <option value="" disabled selected>Select type</option>
+                                        <option value="ydfinvoice">Invoices</option>
+                                        <option value="ydfpayment">Payments</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="ydfValue" class="form-label">Value</label>
+                                    <input type="text" class="form-control" id="ydfValue" name="ydfValue" required>
+                                    <div class="invalid-feedback">Please enter the Value.</div>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        <button type="submit" form="ydfOutstandingForm" name="ydfoutstandingsubmit" class="btn btn-primary">Save Entry</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </body>
 </html>
