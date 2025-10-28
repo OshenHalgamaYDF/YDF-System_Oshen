@@ -238,47 +238,60 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <?php
-                        // Fetch and display data from the database
-                        $result = $conn->query("SELECT * FROM usa_shipping_pl ORDER BY date DESC");
-                        if ($result->num_rows > 0) {
-                            while ($row = $result->fetch_assoc()) {
-                                $JC_Commision = $row['kg'] * $row['jc'];
-                                $MoneytoConvert = $row['income'] - ($row['ceylonfresh'] + $row['powerfreight'] + $JC_Commision);
-                                $ConvertedMoney = $MoneytoConvert * $row['exchangerate'];
-                                $Profit = $ConvertedMoney - ($row['fishbill'] + $row['processcost'] + $row['freightcost'] + $row['oh'] + $row['airportcost'] + $row['labourcost']);
-                                ?>
-                                <tr>
-                                    <td><?php echo htmlspecialchars($row['date']); ?></td>
-                                    <td><?php echo htmlspecialchars($row['income']); ?></td>
-                                    <td><?php echo htmlspecialchars($row['kg']); ?></td>
-                                    <td><?php echo htmlspecialchars($JC_Commision); ?></td>
-                                    <td><?php echo htmlspecialchars($row['ceylonfresh']); ?></td>
-                                    <td><?php echo htmlspecialchars($row['powerfreight']); ?></td>
-                                    <td><?php echo htmlspecialchars($MoneytoConvert); ?></td>
-                                    <td><?php echo htmlspecialchars($ConvertedMoney); ?></td>
-                                    <td><?php echo htmlspecialchars($row['fishbill']); ?></td>
-                                    <td><?php echo htmlspecialchars($row['processcost']); ?></td>
-                                    <td><?php echo htmlspecialchars($row['freightcost']); ?></td>
-                                    <td><?php echo htmlspecialchars($row['oh']); ?></td>
-                                    <td><?php echo htmlspecialchars($row['airportcost']); ?></td>
-                                    <td><?php echo htmlspecialchars($row['labourcost']); ?></td>
-                                    <td><?php echo number_format($Profit, 3); ?></td>
-                                    <td class="action-buttons">
-                                        <button class="btn btn-sm btn-warning btn-edit" onclick="editRecord('<?php echo htmlspecialchars($row['id'], ENT_QUOTES); ?>')">
-                                            <i class="fas fa-edit"></i>
-                                        </button>
-                                        <button class="btn btn-sm btn-danger btn-delete" onclick="deleteRecord('<?php echo htmlspecialchars($row['id'], ENT_QUOTES); ?>')">
-                                            <i class="fas fa-trash"></i>
-                                        </button>
-                                    </td>
-                                </tr>
-                            <?php }
-                        } else {
-                            echo "<tr><td colspan='16' class='text-center'>No data available</td></tr>";
-                        }
-                    ?>
-                </tbody>
+                <?php
+                    // Fetch and display data from the database
+                    $result = $conn->query("SELECT * FROM usa_shipping_pl ORDER BY date DESC");
+                    $jctotal = 0;
+                    $profittotal = 0;
+                    if ($result->num_rows > 0) {
+                        while ($row = $result->fetch_assoc()) {
+                            $JC_Commision = $row['kg'] * $row['jc'];
+                            $jctotal += $JC_Commision;
+                            $MoneytoConvert = $row['income'] - ($row['ceylonfresh'] + $row['powerfreight'] + $JC_Commision);
+                            $ConvertedMoney = $MoneytoConvert * $row['exchangerate'];
+                            $Profit = $ConvertedMoney - ($row['fishbill'] + $row['processcost'] + $row['freightcost'] + $row['oh'] + $row['airportcost'] + $row['labourcost']);
+                            $profittotal += $Profit;
+                            ?>
+                            <tr>
+                                <td><?php echo htmlspecialchars($row['date']); ?></td>
+                                <td><?php echo number_format($row['income']); ?></td>
+                                <td><?php echo number_format($row['kg']); ?></td>
+                                <td><?php echo number_format($JC_Commision); ?></td>
+                                <td><?php echo number_format($row['ceylonfresh']); ?></td>
+                                <td><?php echo number_format($row['powerfreight']); ?></td>
+                                <td><?php echo number_format($MoneytoConvert, 3); ?></td>
+                                <td><?php echo number_format($ConvertedMoney, 3); ?></td>
+                                <td><?php echo number_format($row['fishbill']); ?></td>
+                                <td><?php echo number_format($row['processcost']); ?></td>
+                                <td><?php echo number_format($row['freightcost']); ?></td>
+                                <td><?php echo number_format($row['oh']); ?></td>
+                                <td><?php echo number_format($row['airportcost']); ?></td>
+                                <td><?php echo number_format($row['labourcost']); ?></td>
+                                <td><?php echo number_format($Profit, 3); ?></td>
+                                <td class="action-buttons">
+                                    <button class="btn btn-sm btn-warning btn-edit" onclick="editRecord('<?php echo htmlspecialchars($row['id'], ENT_QUOTES); ?>')">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-danger btn-delete" onclick="deleteRecord('<?php echo htmlspecialchars($row['id'], ENT_QUOTES); ?>')">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                                <?php }
+                    } else {?>
+                        <tr><td colspan='16' class='text-center'>No data available</td></tr>
+                        <?php } ?>
+                    </tbody>
+                </tfoot>
+                    <tr>
+                        <td colspan='3'><strong>JC's Commission Total</strong></td>
+                        <td><?php echo number_format($jctotal, 3); ?></td>
+                        <td colspan='9'></td>
+                        <td><strong>Profits Total</strong></td>
+                        <td><?php echo number_format($profittotal, 3); ?></td>
+                        <td></td>
+                    </tr>
+                </tfoot>
             </table>
         </div>
     </div> 
