@@ -1,3 +1,6 @@
+<?php
+    include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\YDFOutstandingStatement\YDFOutstandingStatementController.php');
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -115,65 +118,211 @@
     </style>
 </head>
 <body>
-    <div class="container-fluid mt-4">
+    <div class="container mt-4">
         <h1 class="text-center text-primary mb-4"><b>YDF Outstanding Statement</b></h1>
         <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#YDFOutstandingModal" id="addNewBtn">
                 <i class="fas fa-plus"></i> Enter Outstanding Values
         </button>
 
-        <!-- Modal for YDF Outstanding Statement Input -->
-        <div class="modal fade" id="YDFOutstandingModal" tabindex="-1" aria-labelledby="YDFOutstandingModalLabel" aria-hidden="true">
-            <div class="modal-dialog modal-lg">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title" id="YDFOutstandingModalLabel">YDF Outstanding Statement Input</h5>
-                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-                    </div>
-                    <div class="modal-body">
-                        <form id="ydfOutstandingForm" method="post" action="">
-                            <div class="row g-3">
-                                <div class="col-md-6">
-                                    <label for="ydfDate" class="form-label">Date</label>
-                                    <input type="text" class="form-control" id="ydfDate" name="ydfDate" required>
-                                    <div class="invalid-feedback">Please enter the Date.</div>
-                                </div>
-                                <div class="col-md-6">
-                                    <label for="ydfActivity" class="form-label">Activity</label>
-                                    <input type="text" class="form-control" id="ydfActivity" name="ydfActivity" required>
-                                    <div class="invalid-feedback">Please enter the Activity.</div>
-                                </div>
-                                <div class="col-md-6">
-                                    <label for="ydfReference" class="form-label">Reference</label>
-                                    <input type="text" class="form-control" id="ydfReference" name="ydfReference" required>
-                                    <div class="invalid-feedback">Please enter the Reference.</div>
-                                </div>
-                                <div class="col-md-6">
-                                    <label for="ydfCustomerName" class="form-label">Customer Name</label>
-                                    <input type="text" class="form-control" id="ydfCustomerName" name="ydfCustomerName" required>
-                                    <div class="invalid-feedback">Please enter the Customer Name.</div>
-                                </div>
-                                <div class="col-md-6">
-                                    <select class="form-select" id="ydftype" name="ydftype" required>
-                                        <option value="" disabled selected>Select type</option>
-                                        <option value="ydfinvoice">Invoices</option>
-                                        <option value="ydfpayment">Payments</option>
-                                    </select>
-                                </div>
-                                <div class="col-md-6">
-                                    <label for="ydfValue" class="form-label">Value</label>
-                                    <input type="text" class="form-control" id="ydfValue" name="ydfValue" required>
-                                    <div class="invalid-feedback">Please enter the Value.</div>
-                                </div>
-                            </div>
-                        </form>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                        <button type="submit" form="ydfOutstandingForm" name="ydfoutstandingsubmit" class="btn btn-primary">Save Entry</button>
-                    </div>
-                </div>
-            </div>
+        <!--Table Display-->
+        <div class="table-responsive mt-4">
+            <table id="ydfOutstandingTable" class="table table-striped table-bordered nowrap" style="width:100%">
+                <thead class="table-dark text-center">
+                    <tr>
+                        <th class="text-center">Date</th>
+                        <th class="text-center">Activity</th>
+                        <th class="text-center">Reference</th>
+                        <th class="text-center">Due Date</th>
+                        <th class="text-center">Invoices (USD)</th>
+                        <th class="text-center">Payments (USD)</th>
+                        <th class="text-center">Balance (USD)</th>
+                        <th class="text-center">Action</th> <!-- New Action column -->
+                    </tr>
+                </thead>
+                <tbody class="text-center align-middle">
+                    <?php
+                        $sql = "
+                            SELECT `id`, `date`, activity, reference, `type`, value, timestamp
+                            FROM ydf_outstanding
+                            ORDER BY 
+                                `date` ASC,
+                                CASE 
+                                    WHEN activity = 'Payment Received' THEN 1
+                                    WHEN type = 'payment' THEN 2
+                                    WHEN type = 'invoice' THEN 3
+                                    ELSE 4
+                                END
+                        ";
+                        $result = $conn->query($sql);
+
+                        $balance = 0;
+
+                        if ($result && $result->num_rows > 0) {
+                            while ($row = $result->fetch_assoc()) {
+                                $id = $row['id']; // For edit/delete actions
+                                $date = htmlspecialchars($row['date']);
+                                $activity = htmlspecialchars($row['activity']);
+                                $reference = htmlspecialchars($row['reference']);
+                                $type = htmlspecialchars($row['type']);
+                                $value = floatval($row['value']);
+
+                                // Due date
+                                $dueDate = ($type === 'invoice') ? date('Y-m-d', strtotime($row['date'] . ' +7 days')) : '';
+
+                                $invoice = $type === 'invoice' ? $value : 0;
+                                $payment = $type === 'payment' ? $value : 0;
+
+                                // Update balance
+                                if ($type === 'invoice') {
+                                    $balance += $value;
+                                } elseif ($type === 'payment') {
+                                    $balance -= $value;
+                                }
+
+                                // Payment style
+                                $paymentStyle = ($type === 'payment' && $activity !== 'Payment Received') ? 'style="color:red;"' : '';
+                    ?>
+                                <tr>
+                                    <td><?= $date ?></td>
+                                    <td><?= $activity ?></td>
+                                    <td><?= $reference ?></td>
+                                    <td><?= htmlspecialchars($dueDate) ?></td>
+                                    <td><?= $invoice ? number_format($invoice, 2) : '' ?></td>
+                                    <td <?= $paymentStyle ?>><?= $payment ? number_format($payment, 2) : '' ?></td>
+                                    <td><strong><?= number_format($balance, 2) ?></strong></td>
+                                    <td class="action-buttons">
+                                        <button class="btn btn-sm btn-warning edit-btn" data-id="<?= $id ?>">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-danger delete-btn" data-id="<?= $id ?>">
+                                            <i class="fas fa-trash-alt"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                    <?php
+                            }
+                        } else {
+                            echo "<tr><td colspan='8' class='text-center text-muted'>No data found</td></tr>";
+                        }
+                    ?>
+                </tbody>
+            </table>
         </div>
     </div>
+
+    <!-- Modal for YDF Outstanding Statement Input -->
+    <div class="modal fade" id="YDFOutstandingModal" tabindex="-1" aria-labelledby="YDFOutstandingModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <form method="post" action="" id="ydfOutstandingForm" class="needs-validation" novalidate>
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="YDFOutstandingModalLabel">YDF Outstanding Statement Input</h5>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                                <div class="row g-3">
+                                    <div class="col-md-4">
+                                        <label for="ydfDate" class="form-label">Date</label>
+                                        <input type="date" class="form-control" id="ydfDate" name="ydfDate" required>
+                                        <div class="invalid-feedback">Please enter the Date.</div>
+                                    </div>
+                                    <div class="col-md-8">
+                                        <label for="ydfActivity" class="form-label">Activity</label>
+                                        <input type="text" class="form-control" id="ydfActivity" name="ydfActivity" required>
+                                        <div class="invalid-feedback">Please enter the Activity.</div>
+                                    </div>
+                                    <div class="col-md-12">
+                                        <label for="ydfReference" class="form-label">Reference</label>
+                                        <input type="text" class="form-control" id="ydfReference" name="ydfReference">
+                                        <div class="invalid-feedback">Please enter the Reference.</div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label for="ydftype" class="form-label">Select Outstanding Type</label>
+                                        <select class="form-select" id="ydftype" name="ydftype" required>
+                                            <option value="" disabled selected>Select type</option>
+                                            <option value="invoice">Invoices</option>
+                                            <option value="payment">Payments</option>
+                                        </select>
+                                        <div class="invalid-feedback">Please select an Outstanding Type.</div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label for="ydfValue" class="form-label">Value</label>
+                                        <input type="number" class="form-control" id="ydfValue" step="0.001" name="ydfValue" required>
+                                        <div class="invalid-feedback">Please enter the Value.</div>
+                                    </div>
+                                </div>
+                        </div>
+                        <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                                <button type="submit" form="ydfOutstandingForm" name="ydfoutstandingsubmit" class="btn btn-primary">Save Entry</button>
+                                <button type="submit" name="ydfoutstandingupdate" class="btn btn-primary" style="display:none;">Update Entry</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+    </div>
+ 
+<script>
+    $(document).ready(function(){
+        // Initialize DataTable
+        var table = $('#ydfOutstandingTable').DataTable({
+            responsive:true,
+            fixedHeader:true,
+            columnDefs:[{orderable:false, targets:-1}],
+            "displayStart": 0, // we'll override below
+            "initComplete": function(settings, json) {
+                var api = this.api();
+                var lastPageIndex = Math.ceil(api.rows().count() / api.page.len()) - 1;
+                api.page(lastPageIndex).draw('page');
+            }
+        });
+
+        // Edit Button
+        $('#ydfOutstandingTable').on('click','.edit-btn', function(){
+            var id = $(this).data('id');
+            $.get(window.location.href, {fetchId:id}, function(data){
+                data = JSON.parse(data);
+                $('#ydfDate').val(data.date);
+                $('#ydfActivity').val(data.activity);
+                $('#ydfReference').val(data.reference);
+                $('#ydftype').val(data.type);
+                $('#ydfValue').val(data.value);
+                $('#ydfOutstandingForm').append('<input type="hidden" id="ydfId" name="ydfId" value="'+id+'">');
+                $('button[name="ydfoutstandingsubmit"]').hide();
+                $('button[name="ydfoutstandingupdate"]').show();
+                $('#YDFOutstandingModal .modal-title').text('Edit Outstanding Entry');
+                $('#YDFOutstandingModal').modal('show');
+            });
+        });
+
+        // Delete Button
+        $('#ydfOutstandingTable').on('click','.delete-btn', function(){
+            var id = $(this).data('id');
+            if(confirm('Are you sure you want to delete this entry?')) {
+                $.post(window.location.href,{deleteId:id},function(response){
+                    var res = JSON.parse(response);
+                    if(res.status === 'success') location.reload();
+                    else alert('Failed to delete entry.');
+                });
+            }
+        });
+
+        // Reset modal on close
+        $('#YDFOutstandingModal').on('hidden.bs.modal', function(){
+            $('#ydfOutstandingForm')[0].reset();
+            $('#ydfId').remove();
+            $('button[name="ydfoutstandingsubmit"]').show();
+            $('button[name="ydfoutstandingupdate"]').hide();
+            $('#YDFOutstandingModal .modal-title').text('Enter Outstanding Values');
+            $('#ydfOutstandingForm').removeClass('was-validated');
+        });
+
+        // Bootstrap form validation
+        $('#ydfOutstandingForm').on('submit', function(event){
+            if(!this.checkValidity()){ event.preventDefault(); event.stopPropagation(); }
+            $(this).addClass('was-validated');
+        });
+    });
+</script>
 </body>
 </html>
