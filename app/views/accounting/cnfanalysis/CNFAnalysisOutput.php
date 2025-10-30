@@ -33,6 +33,13 @@
             font-weight: bold;
             background-color: #e9ecef;
         }
+        h2 {
+            font-weight: 800;
+            color: #0d6efd;
+            text-align: center;
+            margin-bottom: 2rem;
+            font-size: 2.7rem;
+        }
         .table th {
             background-color: #f8f9fa;
         }
@@ -94,8 +101,8 @@
 </head>
 <body>
 <div class="container-fluid mt-5">
-    <h2 class="text-center text-primary fw-bold mb-4">Shipment CNF Analysis</h2>
-    <h4 class="text-left text-primary">Please Select year to view CNF analysis</h4>
+    <h2 class="text-center text-primary mb-4">Shipment CNF Analysis</h2>
+    <h4 class="text-left text-primary"><u>Please Select year to view CNF analysis</u></h4>
 
     <!-- Year Filter and Monthly Tabs -->
     <div class="container-fluid mb-4">

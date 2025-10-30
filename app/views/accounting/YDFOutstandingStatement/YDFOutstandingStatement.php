@@ -30,11 +30,12 @@
             background-color: #f8f9fa;
         }
 
-        h1 {
-            font-weight: 700;
+        h2 {
+            font-weight: 800;
             color: #0d6efd;
             text-align: center;
-            margin-bottom: 2rem;
+            margin-bottom: 3rem;
+            font-size: 2.7rem;
         }
 
         .btn-primary i {
@@ -119,7 +120,7 @@
 </head>
 <body>
     <div class="container mt-4">
-        <h1 class="text-center text-primary mb-4"><b>YDF Outstanding Statement</b></h1>
+        <h2 class="text-center text-primary mb-4">YDF Outstanding Statement</h2>
         <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#YDFOutstandingModal" id="addNewBtn">
                 <i class="fas fa-plus"></i> Enter Outstanding Values
         </button>
@@ -221,12 +222,12 @@
                         </div>
                         <div class="modal-body">
                                 <div class="row g-3">
-                                    <div class="col-md-4">
+                                    <div class="col-md-3">
                                         <label for="ydfDate" class="form-label">Date</label>
                                         <input type="date" class="form-control" id="ydfDate" name="ydfDate" required>
                                         <div class="invalid-feedback">Please enter the Date.</div>
                                     </div>
-                                    <div class="col-md-8">
+                                    <div class="col-md-9">
                                         <label for="ydfActivity" class="form-label">Activity</label>
                                         <input type="text" class="form-control" id="ydfActivity" name="ydfActivity" required>
                                         <div class="invalid-feedback">Please enter the Activity.</div>
