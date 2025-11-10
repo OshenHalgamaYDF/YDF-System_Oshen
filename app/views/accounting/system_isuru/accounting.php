@@ -103,6 +103,26 @@ $trial_balance = $conn->query("
     LEFT JOIN voucher_entries ve ON l.ledger_id = ve.ledger_id
     GROUP BY l.ledger_id, l.ledger_name, l.opening_balance, l.balance_type
 ");
+
+// ---- Update Bank Reconciliation ----
+if (isset($_POST['update_brs'])) {
+    $cleared_entries = isset($_POST['cleared']) ? $_POST['cleared'] : [];
+    
+    // Reset all entries first
+    $conn->query("UPDATE bank_reconciliation SET is_cleared = 0, cleared_date = NULL");
+
+    // Mark selected ones as cleared
+    foreach ($cleared_entries as $entry_id) {
+        $stmt = $conn->prepare("INSERT INTO bank_reconciliation (voucher_entry_id, is_cleared, cleared_date)
+                                VALUES (?, 1, CURDATE())
+                                ON DUPLICATE KEY UPDATE is_cleared=1, cleared_date=CURDATE()");
+        $stmt->bind_param("i", $entry_id);
+        $stmt->execute();
+    }
+
+    header("Location: " . $_SERVER['PHP_SELF'] . "?brs_updated=1");
+    exit();
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -131,6 +151,7 @@ $trial_balance = $conn->query("
         <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addVoucherModal">🧾 Add Voucher</button>
         <button class="btn btn-info text-white" data-bs-toggle="modal" data-bs-target="#viewLedgerModal">📘 View Ledger</button>
         <button class="btn btn-warning text-dark" data-bs-toggle="modal" data-bs-target="#trialBalanceModal">📊 Trial Balance</button>
+        <button class="btn btn-secondary text-white" data-bs-toggle="modal" data-bs-target="#bankReconciliationModal">🏦 Bank Reconciliation</button>
     </div>
 
     <!-- Voucher List -->
@@ -384,11 +405,51 @@ $trial_balance = $conn->query("
   </div>
 </div>
 
+<!-- Modal: Bank Reconciliation -->
+<div class="modal fade" id="bankReconciliationModal" tabindex="-1">
+  <div class="modal-dialog modal-xl">
+    <form method="POST" class="modal-content">
+      <div class="modal-header bg-secondary text-white">
+        <h5 class="modal-title">🏦 Bank Reconciliation Statement</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body table-responsive">
+        <p><strong>Select your Bank Ledger:</strong></p>
+        <select name="bank_ledger" id="bankLedger" class="form-select mb-3" required>
+          <option value="">-- Select Bank Account --</option>
+          <?php
+          $banks = $conn->query("SELECT l.ledger_id, l.ledger_name
+                                FROM ledgers l
+                                JOIN account_groups g ON l.group_id = g.group_id
+                                WHERE g.group_name = 'Bank Accounts'
+                                AND l.ledger_name NOT LIKE '%cash%'
+                                ");
+          while($b = $banks->fetch_assoc()) {
+              echo "<option value='{$b['ledger_id']}'>" . htmlspecialchars($b['ledger_name']) . "</option>";
+          }
+          ?>
+        </select>
+
+        <div id="bankEntriesTable">
+          <p class="text-muted">Select a bank account to view entries...</p>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+        <button type="submit" name="update_brs" class="btn btn-success">💾 Update Reconciliation</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 // Fix for ledger view functionality
 document.addEventListener('DOMContentLoaded', function() {
     const ledgerSelect = document.getElementById("ledgerSelect");
+    const bankLedger = document.getElementById("bankLedger");
     if (ledgerSelect) {
         ledgerSelect.addEventListener("change", function() {
             const id = this.value;
@@ -419,6 +480,25 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+
+    if (bankLedger) {
+        bankLedger.addEventListener("change", function() {
+            const ledger_id = this.value;
+            const target = document.getElementById("bankEntriesTable");
+            if (!ledger_id) return;
+
+            target.innerHTML = `
+                <div class="text-center">
+                    <div class="spinner-border text-primary" role="status"></div>
+                    <p class="mt-2">Loading entries...</p>
+                </div>`;
+
+            fetch("brs_view.php?ledger_id=" + ledger_id)
+                .then(res => res.text())
+                .then(html => target.innerHTML = html)
+                .catch(err => target.innerHTML = `<div class='alert alert-danger'>Error loading data: ${err}</div>`);
+        });
+    }
     
     // Refresh page after modal form submissions to show updated data
     const modals = document.querySelectorAll('.modal');
@@ -432,6 +512,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 });
+
 </script>
 </body>
 </html>
