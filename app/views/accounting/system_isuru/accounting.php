@@ -83,45 +83,50 @@ $balances = $conn->query("
         l.balance_type,
         COALESCE(SUM(CASE WHEN ve.type='Dr' THEN ve.amount ELSE 0 END), 0) AS total_dr,
         COALESCE(SUM(CASE WHEN ve.type='Cr' THEN ve.amount ELSE 0 END), 0) AS total_cr,
-        (l.opening_balance + 
-         COALESCE(SUM(CASE WHEN ve.type='Dr' THEN ve.amount ELSE 0 END), 0) - 
-         COALESCE(SUM(CASE WHEN ve.type='Cr' THEN ve.amount ELSE 0 END), 0)) AS net_balance
-    FROM ledgers l
-    LEFT JOIN voucher_entries ve ON l.ledger_id = ve.ledger_id
-    GROUP BY l.ledger_id, l.ledger_name, l.opening_balance, l.balance_type
-");
-
-// ---- CORRECTED Trial Balance ----
-$trial_balance = $conn->query("
-    SELECT 
-        l.ledger_name,
-        (CASE WHEN l.balance_type='Dr' THEN l.opening_balance ELSE 0 END) + 
-        COALESCE(SUM(CASE WHEN ve.type='Dr' THEN ve.amount ELSE 0 END), 0) AS Debit,
-        (CASE WHEN l.balance_type='Cr' THEN l.opening_balance ELSE 0 END) + 
-        COALESCE(SUM(CASE WHEN ve.type='Cr' THEN ve.amount ELSE 0 END), 0) AS Credit
+        (
+          (CASE WHEN UPPER(l.balance_type)='DR' THEN l.opening_balance ELSE -l.opening_balance END)
+          + COALESCE(SUM(CASE WHEN ve.type='Dr' THEN ve.amount ELSE 0 END), 0)
+          - COALESCE(SUM(CASE WHEN ve.type='Cr' THEN ve.amount ELSE 0 END), 0)
+        ) AS net_balance
     FROM ledgers l
     LEFT JOIN voucher_entries ve ON l.ledger_id = ve.ledger_id
     GROUP BY l.ledger_id, l.ledger_name, l.opening_balance, l.balance_type
 ");
 
 // ---- Update Bank Reconciliation ----
-if (isset($_POST['update_brs'])) {
-    $cleared_entries = isset($_POST['cleared']) ? $_POST['cleared'] : [];
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_brs'])) {
+    $entry_id = isset($_POST['entry_id']) ? intval($_POST['entry_id']) : 0;
+    $is_cleared = isset($_POST['is_cleared']) ? intval($_POST['is_cleared']) : 0;
     
-    // Reset all entries first
-    $conn->query("UPDATE bank_reconciliation SET is_cleared = 0, cleared_date = NULL");
-
-    // Mark selected ones as cleared
-    foreach ($cleared_entries as $entry_id) {
-        $stmt = $conn->prepare("INSERT INTO bank_reconciliation (voucher_entry_id, is_cleared, cleared_date)
-                                VALUES (?, 1, CURDATE())
-                                ON DUPLICATE KEY UPDATE is_cleared=1, cleared_date=CURDATE()");
-        $stmt->bind_param("i", $entry_id);
-        $stmt->execute();
+    if ($entry_id > 0) {
+        // Check if record exists in bank_reconciliation
+        $check_query = $conn->query("SELECT reconciliation_id FROM bank_reconciliation WHERE voucher_entry_id = $entry_id");
+        
+        if ($check_query && $check_query->num_rows > 0) {
+            // Update existing record
+            $cleared_date = $is_cleared ? date('Y-m-d') : NULL;
+            $update_query = "UPDATE bank_reconciliation SET is_cleared = $is_cleared, cleared_date = " . ($cleared_date ? "'$cleared_date'" : "NULL") . " WHERE voucher_entry_id = $entry_id";
+            
+            if ($conn->query($update_query)) {
+                echo json_encode(['success' => true, 'message' => 'Reconciliation updated']);
+            } else {
+                echo json_encode(['success' => false, 'error' => $conn->error]);
+            }
+        } else {
+            // Insert new record
+            $cleared_date = $is_cleared ? date('Y-m-d') : NULL;
+            $insert_query = "INSERT INTO bank_reconciliation (voucher_entry_id, is_cleared, cleared_date) VALUES ($entry_id, $is_cleared, " . ($cleared_date ? "'$cleared_date'" : "NULL") . ")";
+            
+            if ($conn->query($insert_query)) {
+                echo json_encode(['success' => true, 'message' => 'Reconciliation created']);
+            } else {
+                echo json_encode(['success' => false, 'error' => $conn->error]);
+            }
+        }
+    } else {
+        echo json_encode(['success' => false, 'error' => 'Invalid entry ID']);
     }
-
-    header("Location: " . $_SERVER['PHP_SELF'] . "?brs_updated=1");
-    exit();
+    exit;
 }
 ?>
 <!DOCTYPE html>
@@ -129,9 +134,19 @@ if (isset($_POST['update_brs'])) {
 <head>
     <meta charset="UTF-8">
     <title>💼 Mini Accounting System</title>
+
+    <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Optional: Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+
+    <!-- Optional: Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+
+    <!-- Custom CSS -->
     <style>
-        body { background: #f8f9fa; }
+        body { background: #f8f9fa; font-family: 'Roboto', sans-serif; }
         .container { max-width: 1000px; margin-top: 40px; }
         .card { box-shadow: 0 0 10px rgba(0,0,0,0.1); }
         h2 { color: #0d6efd; font-weight: 700; text-align: center; margin-bottom: 20px; }
@@ -139,19 +154,27 @@ if (isset($_POST['update_brs'])) {
         .btn-group-custom { display: flex; gap: 10px; flex-wrap: wrap; }
         .btn-group-custom .btn { flex: 1; min-width: 150px; }
     </style>
+
+    <!-- Bootstrap JS Bundle (Popper included) -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </head>
 <body>
 
 <div class="container">
-    <h2>💼 Mini Accounting System</h2>
+    <h2>YDF Accounting System</h2>
 
     <!-- Top Buttons -->
     <div class="btn-group-custom mb-4">
         <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addLedgerModal">➕ Add Ledger</button>
         <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addVoucherModal">🧾 Add Voucher</button>
-        <button class="btn btn-info text-white" data-bs-toggle="modal" data-bs-target="#viewLedgerModal">📘 View Ledger</button>
-        <button class="btn btn-warning text-dark" data-bs-toggle="modal" data-bs-target="#trialBalanceModal">📊 Trial Balance</button>
-        <button class="btn btn-secondary text-white" data-bs-toggle="modal" data-bs-target="#bankReconciliationModal">🏦 Bank Reconciliation</button>
+        <a href="view_ledger.php" class="btn btn-info text-white">📘 View Ledger</a>
+        
+        <!-- Changed: open bank reconciliation in a separate page -->
+        <a href="bank_reconciliation.php" class="btn btn-secondary text-white">🏦 Bank Reconciliation</a>
+
+        <a href="trial_balance.php" class="btn btn-warning text-dark">📊 Trial Balance</a>
+        <a href="income_statement.php" class="btn btn-danger">📈 Income Statement</a>
+        <a href="balance_sheet.php" class="btn btn-primary" style="background-color:#6610f2;">💰 Balance Sheet</a>
     </div>
 
     <!-- Voucher List -->
@@ -160,14 +183,13 @@ if (isset($_POST['update_brs'])) {
         <div class="card-body table-responsive">
             <table class="table table-bordered table-striped">
                 <thead class="table-dark">
-                    <tr><th>ID</th><th>Date</th><th>Type</th><th>Entries</th><th>Narration</th></tr>
+                    <tr><th>ID</th><th>Date</th><th>Entries</th><th>Narration</th></tr>
                 </thead>
                 <tbody>
                     <?php while($v = $vouchers->fetch_assoc()) { ?>
                         <tr>
                             <td><?= $v['voucher_id']; ?></td>
                             <td><?= $v['date']; ?></td>
-                            <td><?= $v['voucher_type']; ?></td>
                             <td><?= $v['entries']; ?></td>
                             <td><?= $v['narration']; ?></td>
                         </tr>
@@ -219,47 +241,50 @@ if (isset($_POST['update_brs'])) {
 <!-- Modal: Add Ledger -->
 <div class="modal fade" id="addLedgerModal" tabindex="-1">
   <div class="modal-dialog">
-    <form method="POST" class="modal-content">
-      <div class="modal-header bg-primary text-white">
-        <h5 class="modal-title">Add New Ledger</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body">
-        <label>Ledger Name</label>
-        <input type="text" name="ledger_name" class="form-control mb-2" required>
+    <div class="modal-content">
+      <form method="POST">
+        <div class="modal-header bg-primary text-white">
+          <h5 class="modal-title">Add New Ledger</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <label>Ledger Name</label>
+          <input type="text" name="ledger_name" class="form-control mb-2" required>
 
-        <label>Account Group</label>
-        <select name="group_id" class="form-select mb-2" required>
-            <option value="">-- Select Account Group --</option>
-            <?php
-            // Fetch account groups to allow selection
-            $groups = $conn->query("SELECT group_id, group_name FROM account_groups ORDER BY group_name ASC");
-            if ($groups && $groups->num_rows > 0) {
-                while($g = $groups->fetch_assoc()) {
-                    echo "<option value='{$g['group_id']}'>" . htmlspecialchars($g['group_name']) . "</option>";
-                }
-            } else {
-                echo "<option value=''>No account groups found - please create one first</option>";
-            }
-            ?>
-        </select>
+          <label>Account Group</label>
+          <select name="group_id" class="form-select mb-2" required>
+              <option value="">-- Select Account Group --</option>
+              <?php
+              // Fetch account groups to allow selection
+              $groups = $conn->query("SELECT group_id, group_name FROM account_groups ORDER BY group_name ASC");
+              if ($groups && $groups->num_rows > 0) {
+                  while($g = $groups->fetch_assoc()) {
+                      echo "<option value='{$g['group_id']}'>" . htmlspecialchars($g['group_name']) . "</option>";
+                  }
+              } else {
+                  echo "<option value=''>No account groups found - please create one first</option>";
+              }
+              ?>
+          </select>
 
-        <label>Opening Balance</label>
-        <input type="number" step="0.01" name="opening_balance" class="form-control mb-2" value="0">
+          <label>Opening Balance</label>
+          <input type="number" step="0.01" name="opening_balance" class="form-control mb-2" value="0">
 
-        <label>Type</label>
-        <select name="balance_type" class="form-select mb-2">
-            <option value="Dr">Dr</option>
-            <option value="Cr">Cr</option>
-        </select>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-        <button type="submit" name="add_ledger" class="btn btn-success">💾 Save Ledger</button>
-      </div>
-    </form>
+          <label>Type</label>
+          <select name="balance_type" class="form-select mb-2">
+              <option value="Dr">Dr</option>
+              <option value="Cr">Cr</option>
+          </select>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+          <button type="submit" name="add_ledger" class="btn btn-success">💾 Save Ledger</button>
+        </div>
+      </form>
+    </div>
   </div>
 </div>
+
 
 <!-- Modal: Add Voucher -->
 <div class="modal fade" id="addVoucherModal" tabindex="-1">
@@ -322,197 +347,94 @@ if (isset($_POST['update_brs'])) {
       </div>
     </form>
   </div>
-</div>
-
-<!-- Modal: View Ledger -->
-<div class="modal fade" id="viewLedgerModal" tabindex="-1">
-  <div class="modal-dialog modal-lg">
-    <div class="modal-content">
-      <div class="modal-header bg-info text-white">
-        <h5 class="modal-title">View Ledger</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body">
-        <form id="ledgerViewForm">
-          <label>Select Ledger</label>
-          <select name="ledger_id" id="ledgerSelect" class="form-select mb-3">
-            <?php
-            $ledgers3 = $conn->query("SELECT ledger_id, ledger_name FROM ledgers ORDER BY ledger_name ASC");
-            while($l = $ledgers3->fetch_assoc()) echo "<option value='{$l['ledger_id']}'>" . htmlspecialchars($l['ledger_name']) . "</option>";
-            ?>
-          </select>
-        </form>
-        <div id="ledgerDetails" class="mt-3">
-          <p class="text-muted">Select a ledger to view details...</p>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Modal: Trial Balance -->
-<div class="modal fade" id="trialBalanceModal" tabindex="-1">
-  <div class="modal-dialog modal-lg">
-    <div class="modal-content">
-      <div class="modal-header bg-warning">
-        <h5 class="modal-title">📊 Trial Balance</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body table-responsive">
-        <table class="table table-bordered table-striped">
-          <thead class="table-warning">
-            <tr><th>Ledger Name</th><th>Debit (Dr)</th><th>Credit (Cr)</th></tr>
-          </thead>
-          <tbody>
-            <?php 
-            $totalDr = 0; $totalCr = 0;
-            if ($trial_balance && $trial_balance->num_rows > 0) {
-                while($t = $trial_balance->fetch_assoc()) { 
-                    $totalDr += $t['Debit'];
-                    $totalCr += $t['Credit'];
-            ?>
-              <tr>
-                <td class="text-start"><?= htmlspecialchars($t['ledger_name']); ?></td>
-                <td class="text-end"><?= number_format($t['Debit'], 2); ?></td>
-                <td class="text-end"><?= number_format($t['Credit'], 2); ?></td>
-              </tr>
-            <?php 
-                }
-            } else { 
-            ?>
-              <tr>
-                <td colspan="3" class="text-muted">No trial balance data found</td>
-              </tr>
-            <?php } ?>
-            <tr class="fw-bold table-secondary">
-              <td>Total</td>
-              <td class="text-end"><?= number_format($totalDr, 2); ?></td>
-              <td class="text-end"><?= number_format($totalCr, 2); ?></td>
-            </tr>
-          </tbody>
-        </table>
-        <p class="text-center mt-2 <?= abs($totalDr - $totalCr) < 0.01 ? 'text-success' : 'text-danger' ?>">
-            <?= abs($totalDr - $totalCr) < 0.01 ? "✅ Trial Balance Matches!" : "⚠️ Difference Found: " . number_format(abs($totalDr - $totalCr), 2) ?>
-        </p>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Modal: Bank Reconciliation -->
-<div class="modal fade" id="bankReconciliationModal" tabindex="-1">
-  <div class="modal-dialog modal-xl">
-    <form method="POST" class="modal-content">
-      <div class="modal-header bg-secondary text-white">
-        <h5 class="modal-title">🏦 Bank Reconciliation Statement</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-
-      <div class="modal-body table-responsive">
-        <p><strong>Select your Bank Ledger:</strong></p>
-        <select name="bank_ledger" id="bankLedger" class="form-select mb-3" required>
-          <option value="">-- Select Bank Account --</option>
-          <?php
-          $banks = $conn->query("SELECT l.ledger_id, l.ledger_name
-                                FROM ledgers l
-                                JOIN account_groups g ON l.group_id = g.group_id
-                                WHERE g.group_name = 'Bank Accounts'
-                                AND l.ledger_name NOT LIKE '%cash%'
-                                ");
-          while($b = $banks->fetch_assoc()) {
-              echo "<option value='{$b['ledger_id']}'>" . htmlspecialchars($b['ledger_name']) . "</option>";
-          }
-          ?>
-        </select>
-
-        <div id="bankEntriesTable">
-          <p class="text-muted">Select a bank account to view entries...</p>
-        </div>
-      </div>
-
-      <div class="modal-footer">
-        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
-        <button type="submit" name="update_brs" class="btn btn-success">💾 Update Reconciliation</button>
-      </div>
-    </form>
-  </div>
-</div>
-
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</div>   
 <script>
-// Fix for ledger view functionality
 document.addEventListener('DOMContentLoaded', function() {
-    const ledgerSelect = document.getElementById("ledgerSelect");
-    const bankLedger = document.getElementById("bankLedger");
+    console.log('✓ DOM Content Loaded');
+
+    // ===== BANK RECONCILIATION MODAL =====
+    const brsLedgerSelect = document.getElementById('brsLedgerSelect');
+    if (brsLedgerSelect) {
+        brsLedgerSelect.addEventListener('change', function() {
+        });
+    }
+
+    // Reset BRS modal when opened
+    const brsModal = document.getElementById('bankReconciliationModal');
+    if (brsModal) {
+        brsModal.addEventListener('show.bs.modal', function() {
+            if (brsDet) brsDet.innerHTML = '<p class="text-muted">Select a bank account to view entries...</p>';
+        });
+    }
+
+    // ===== VIEW LEDGER MODAL (ADDED) =====
+    const ledgerSelect = document.getElementById('ledgerSelect');
     if (ledgerSelect) {
-        ledgerSelect.addEventListener("change", function() {
-            const id = this.value;
-            if (id) {
-                // Show loading
-                document.getElementById("ledgerDetails").innerHTML = `
-                    <div class="text-center">
-                        <div class="spinner-border text-primary" role="status">
-                            <span class="visually-hidden">Loading...</span>
-                        </div>
-                        <p class="mt-2">Loading ledger details...</p>
-                    </div>
-                `;
-                
-                // Fetch ledger details
-                fetch("ledger_view.php?id=" + id)
-                    .then(res => res.text())
-                    .then(data => {
-                        document.getElementById("ledgerDetails").innerHTML = data;
-                    })
-                    .catch(err => {
-                        document.getElementById("ledgerDetails").innerHTML = `
-                            <div class="alert alert-danger">
-                                Error loading ledger details: ${err.message}
-                            </div>
-                        `;
-                    });
+        ledgerSelect.addEventListener('change', function() {
+            const ledgerId = this.value;
+            const detailsDiv = document.getElementById('ledgerDetails');
+            if (!detailsDiv) return;
+            if (!ledgerId) {
+                detailsDiv.innerHTML = '<p class="text-muted">Select a ledger to view details...</p>';
+                return;
             }
+            detailsDiv.innerHTML = '<div class="text-center"><span class="spinner-border spinner-border-sm text-primary me-2"></span> Loading ledger data...</div>';
+            const url = 'ledger_view.php?id=' + encodeURIComponent(ledgerId);
+            fetch(url)
+                .then(response => {
+                    if (!response.ok) throw new Error('HTTP ' + response.status);
+                    return response.text();
+                })
+                .then(html => { detailsDiv.innerHTML = html; })
+                .catch(err => {
+                    console.error('Ledger Fetch Error:', err);
+                    detailsDiv.innerHTML = '<div class="alert alert-danger">Error loading ledger: ' + err.message + '</div>';
+                });
         });
     }
 
-    if (bankLedger) {
-        bankLedger.addEventListener("change", function() {
-            const ledger_id = this.value;
-            const target = document.getElementById("bankEntriesTable");
-            if (!ledger_id) return;
-
-            target.innerHTML = `
-                <div class="text-center">
-                    <div class="spinner-border text-primary" role="status"></div>
-                    <p class="mt-2">Loading entries...</p>
-                </div>`;
-
-            fetch("brs_view.php?ledger_id=" + ledger_id)
-                .then(res => res.text())
-                .then(html => target.innerHTML = html)
-                .catch(err => target.innerHTML = `<div class='alert alert-danger'>Error loading data: ${err}</div>`);
+    // Reset View Ledger modal when opened
+    const viewModal = document.getElementById('viewLedgerModal');
+    if (viewModal) {
+        viewModal.addEventListener('show.bs.modal', function() {
+            const sel = document.getElementById('ledgerSelect');
+            const det = document.getElementById('ledgerDetails');
+            if (sel) sel.value = '';
+            if (det) det.innerHTML = '<p class="text-muted">Select a ledger to view details...</p>';
         });
     }
-    
-    // Refresh page after modal form submissions to show updated data
-    const modals = document.querySelectorAll('.modal');
-    modals.forEach(modal => {
-        modal.addEventListener('hidden.bs.modal', function () {
-            if (document.querySelector('[name="add_ledger"]') || document.querySelector('[name="submit_voucher"]')) {
-                setTimeout(() => {
-                    window.location.reload();
-                }, 100);
-            }
-        });
+
+    // ===== CHECKBOX HANDLER FOR MARKING CLEARED =====
+    document.addEventListener('change', function(e) {
+        if (!e.target) return;
+        if (e.target.classList && e.target.classList.contains('brs-checkbox')) {
+            const entryId = e.target.dataset.entryId;
+            const isChecked = e.target.checked ? 1 : 0;
+            const formData = new FormData();
+            formData.append('update_brs', '1');
+            formData.append('entry_id', entryId);
+            formData.append('is_cleared', isChecked);
+            fetch('accounting.php', { method: 'POST', body: formData })
+                .then(res => res.json())
+                .then data => {
+                    if (data.success) {
+                        const msg = data.message;
+                        Swal.fire({ icon: 'success', title: 'Updated', text: msg });
+                    } else {
+                        const err = data.error || 'Unknown error';
+                        Swal.fire({ icon: 'error', title: 'Error', text: err });
+                    }
+                })
+                .catch(err => {
+                    console.error('Fetch Error:', err);
+                    Swal.fire({ icon: 'error', title: 'Error', text: 'Network error: ' + err.message });
+                });
+        }
     });
 });
-
 </script>
+
+<!-- SweetAlert2 (for alerts) -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </body>
 </html>
