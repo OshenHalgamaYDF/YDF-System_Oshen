@@ -1,8 +1,7 @@
 <?php
-// Combined view_ledger + ledger_view functionality
-// - GET with ?id= or ?ledger_id= returns the ledger inner HTML (AJAX partial)
-// - no id => renders full page with dropdown and JS that fetches the partial
-
+// ========================================
+// VIEW LEDGER (combined AJAX partial + full page) with Export only
+// ========================================
 $servername = "localhost";
 $username   = "root";
 $password   = "";
@@ -14,11 +13,101 @@ if ($conn->connect_error) {
     echo "<div class='alert alert-danger'>Database connection failed: " . htmlspecialchars($conn->connect_error) . "</div>";
     exit;
 }
+$conn->set_charset('utf8mb4');
 
 // Accept either 'id' or 'ledger_id' for compatibility
 $ledgerIdParam = isset($_GET['ledger_id']) ? 'ledger_id' : (isset($_GET['id']) ? 'id' : null);
 
-// If called as AJAX partial (single ledger), output inner HTML only
+// ---------- EXPORT CSV for a single ledger ----------
+if ($ledgerIdParam && isset($_GET['export']) && $_GET['export'] === 'excel') {
+    $id = intval($_GET[$ledgerIdParam] ?? 0);
+    if ($id <= 0) {
+        http_response_code(400);
+        die("Invalid ledger id for export.");
+    }
+
+    $stmtL = $conn->prepare("SELECT ledger_name, opening_balance, balance_type FROM ledgers WHERE ledger_id = ? LIMIT 1");
+    $stmtL->bind_param("i", $id);
+    $stmtL->execute();
+    $resL = $stmtL->get_result();
+    if (!$resL || $resL->num_rows === 0) {
+        $stmtL->close();
+        http_response_code(404);
+        die("Ledger not found.");
+    }
+    $ledger = $resL->fetch_assoc();
+    $stmtL->close();
+
+    $ledger_name = $ledger['ledger_name'];
+    $opening_balance = (float)$ledger['opening_balance'];
+    $balance_type = strtoupper($ledger['balance_type'] ?? 'DR');
+
+    $tstmt = $conn->prepare("
+        SELECT v.date, v.voucher_type, ve.type, ve.amount, v.narration, v.voucher_id
+        FROM voucher_entries ve
+        JOIN vouchers v ON ve.voucher_id = v.voucher_id
+        WHERE ve.ledger_id = ?
+        ORDER BY v.date ASC, v.voucher_id ASC
+    ");
+    $tstmt->bind_param("i", $id);
+    $tstmt->execute();
+    $q = $tstmt->get_result();
+
+    header('Content-Type: text/csv; charset=UTF-8');
+    $safeName = preg_replace('/[^a-z0-9_\-]/i','_', $ledger_name ?: 'ledger_'.$id);
+    $filename = "ledger_{$safeName}_" . date('Ymd') . ".csv";
+    header('Content-Disposition: attachment; filename="'.$filename.'"');
+
+    echo "\xEF\xBB\xBF";
+    $out = fopen('php://output', 'w');
+
+    fputcsv($out, ["Ledger:",$ledger_name]);
+    fputcsv($out, ["As at:", date('Y-m-d')]);
+    fputcsv($out, []);
+    fputcsv($out, ['Date','Voucher Type','Voucher ID','Dr Amount','Cr Amount','Running Balance','Balance Type','Narration']);
+
+    $running_balance = ($balance_type === 'DR') ? $opening_balance : -$opening_balance;
+    $totalDr = 0.0;
+    $totalCr = 0.0;
+
+    while ($r = $q->fetch_assoc()) {
+        $type = $r['type'];
+        $amount = (float)$r['amount'];
+        $date = $r['date'];
+        $voucher_type = $r['voucher_type'];
+        $voucher_id = $r['voucher_id'];
+        $narration = $r['narration'];
+
+        if ($type === 'Dr') {
+            $totalDr += $amount;
+            $running_balance += $amount;
+            $drAmt = number_format($amount,2,'.','');
+            $crAmt = '';
+        } else {
+            $totalCr += $amount;
+            $running_balance -= $amount;
+            $drAmt = '';
+            $crAmt = number_format($amount,2,'.','');
+        }
+
+        $display_balance = number_format(abs($running_balance),2,'.','');
+        $balance_side = ($running_balance >= 0) ? 'Dr' : 'Cr';
+
+        fputcsv($out, [$date, $voucher_type, $voucher_id, $drAmt, $crAmt, $display_balance, $balance_side, $narration]);
+    }
+
+    fputcsv($out, []);
+    fputcsv($out, ['Totals', '', '', number_format($totalDr,2,'.',''), number_format($totalCr,2,'.',''), '', '', '']);
+    fputcsv($out, ['Opening Balance', '', '', ($balance_type==='DR' ? number_format($opening_balance,2,'.','') : ''), ($balance_type==='CR' ? number_format($opening_balance,2,'.','') : ''), number_format(abs(($balance_type==='DR'? $opening_balance : -$opening_balance)),2,'.',''), $balance_type, '']);
+    fputcsv($out, ['Closing Running Balance', '', '', '', '', number_format(abs($running_balance),2,'.',''), ($running_balance>=0? 'Dr':'Cr'), '']);
+
+    fclose($out);
+    $tstmt->close();
+    $conn->close();
+    exit;
+}
+
+// ---------- AJAX partial view (single ledger) ----------
 if ($ledgerIdParam) {
     $id = intval($_GET[$ledgerIdParam] ?? 0);
     if ($id <= 0) {
@@ -26,7 +115,6 @@ if ($ledgerIdParam) {
         exit;
     }
 
-    // Fetch ledger header
     $stmtL = $conn->prepare("SELECT ledger_name, opening_balance, balance_type FROM ledgers WHERE ledger_id = ? LIMIT 1");
     $stmtL->bind_param("i", $id);
     $stmtL->execute();
@@ -41,9 +129,8 @@ if ($ledgerIdParam) {
 
     $ledger_name = htmlspecialchars($ledger['ledger_name']);
     $opening_balance = (float)$ledger['opening_balance'];
-    $balance_type = $ledger['balance_type'];
+    $balance_type = strtoupper($ledger['balance_type'] ?? 'DR');
 
-    // Transactions
     $tstmt = $conn->prepare("
         SELECT v.date, v.voucher_type, ve.type, ve.amount, v.narration, v.voucher_id
         FROM voucher_entries ve
@@ -59,17 +146,24 @@ if ($ledgerIdParam) {
     $tstmt->execute();
     $q = $tstmt->get_result();
 
-    // Running balance initialised with sign of opening balance
-    $running_balance = (strtoupper($balance_type) === 'DR') ? $opening_balance : -$opening_balance;
+    $running_balance = ($balance_type === 'DR') ? $opening_balance : -$opening_balance;
     $totalDr = 0.0;
     $totalCr = 0.0;
 
     ob_start();
     ?>
     <div class="card mb-3">
-      <div class="card-header bg-primary text-white">
-        <h5 class="mb-0">📘 Ledger: <?= $ledger_name ?></h5>
+      <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+        <div>
+          <h5 class="mb-0">📘 Ledger: <?= $ledger_name ?></h5>
+          <small class="text-white-50">Opening: <?= number_format($opening_balance,2) ?> <?= $balance_type ?></small>
+        </div>
+        <!-- Export only -->
+        <a href="?id=<?= $id ?>&export=excel" class="btn btn-light btn-sm" title="Download ledger as Excel (CSV)">
+            <i class="bi bi-file-earmark-spreadsheet"></i> Export Excel
+        </a>
       </div>
+
       <div class="card-body">
         <div class="row mb-2">
           <div class="col-md-6"><strong>Opening Balance:</strong> <?= number_format($opening_balance,2) ?> <?= htmlspecialchars($balance_type) ?></div>
@@ -114,22 +208,6 @@ if ($ledgerIdParam) {
                 </tr>
               <?php endwhile; ?>
               </tbody>
-              <tfoot class="table-secondary">
-                <tr class="fw-bold">
-                  <td colspan="3" class="text-end">Totals:</td>
-                  <td class="text-end text-success"><?= number_format($totalDr,2) ?></td>
-                  <td class="text-end text-danger"><?= number_format($totalCr,2) ?></td>
-                  <td class="text-end"><?= number_format(abs($running_balance),2) ?> <?= ($running_balance >= 0 ? 'Dr' : 'Cr') ?></td>
-                  <td></td>
-                </tr>
-                <tr class="fw-bold table-info">
-                  <td colspan="3" class="text-end">Opening Balance:</td>
-                  <td class="text-end"><?= (strtoupper($balance_type) === 'DR') ? number_format($opening_balance,2) : '' ?></td>
-                  <td class="text-end"><?= (strtoupper($balance_type) === 'CR') ? number_format($opening_balance,2) : '' ?></td>
-                  <td class="text-end"><?= number_format($opening_balance,2) ?> <?= htmlspecialchars($balance_type) ?></td>
-                  <td></td>
-                </tr>
-              </tfoot>
             </table>
           </div>
         <?php endif; ?>
@@ -145,7 +223,7 @@ if ($ledgerIdParam) {
     exit;
 }
 
-// Otherwise render full page with dropdown and JS that fetches the partial
+// ---------- Full page ----------
 $ledgers = $conn->query("SELECT ledger_id, ledger_name FROM ledgers ORDER BY ledger_name ASC");
 ?>
 <!doctype html>
@@ -155,6 +233,7 @@ $ledgers = $conn->query("SELECT ledger_id, ledger_name FROM ledgers ORDER BY led
   <title>View Ledger</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
   <style> body { background:#f5f7fa } .container{ max-width:1100px; margin-top:32px }</style>
 </head>
 <body>
@@ -168,8 +247,8 @@ $ledgers = $conn->query("SELECT ledger_id, ledger_name FROM ledgers ORDER BY led
         <a class="btn btn-light btn-sm" href="accounting.php">← Back</a>
       </div>
       <div class="card-body">
-        <div class="row g-3 mb-3">
-          <div class="col-md-6">
+        <div class="row g-3 mb-3 align-items-end">
+          <div class="col-md-12">
             <label for="ledgerSelect" class="form-label fw-semibold">Select Ledger</label>
             <select id="ledgerSelect" class="form-select">
               <option value="">-- Select a ledger --</option>
@@ -177,10 +256,6 @@ $ledgers = $conn->query("SELECT ledger_id, ledger_name FROM ledgers ORDER BY led
                 <option value="<?= (int)$l['ledger_id'] ?>"><?= htmlspecialchars($l['ledger_name']) ?></option>
               <?php endwhile; ?>
             </select>
-          </div>
-          <div class="col-md-6 d-flex align-items-end justify-content-end">
-            <button class="btn btn-primary btn-sm me-2" id="btnPrint">🖨️ Print</button>
-            <button class="btn btn-outline-secondary btn-sm" id="btnRefresh">⟳ Refresh</button>
           </div>
         </div>
 
@@ -195,8 +270,6 @@ $ledgers = $conn->query("SELECT ledger_id, ledger_name FROM ledgers ORDER BY led
 (function(){
   const select = document.getElementById('ledgerSelect');
   const details = document.getElementById('ledgerDetails');
-  const btnPrint = document.getElementById('btnPrint');
-  const btnRefresh = document.getElementById('btnRefresh');
 
   async function loadLedger(id) {
     if (!id) {
@@ -217,10 +290,7 @@ $ledgers = $conn->query("SELECT ledger_id, ledger_name FROM ledgers ORDER BY led
   }
 
   select.addEventListener('change', () => loadLedger(select.value));
-  btnRefresh.addEventListener('click', () => loadLedger(select.value));
-  btnPrint.addEventListener('click', () => { window.print(); });
 
-  // Auto-load if ?id= or ?ledger_id= in URL
   window.addEventListener('load', () => {
     const params = new URLSearchParams(window.location.search);
     const id = params.get('id') || params.get('ledger_id');
@@ -234,5 +304,5 @@ $ledgers = $conn->query("SELECT ledger_id, ledger_name FROM ledgers ORDER BY led
 </body>
 </html>
 <?php
-// ...existing code...
+// end of file
 ?>

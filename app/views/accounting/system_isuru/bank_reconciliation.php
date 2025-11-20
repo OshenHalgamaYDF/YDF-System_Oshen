@@ -1,6 +1,7 @@
 <?php
 // ========================================
-// BANK RECONCILIATION (combined view + AJAX endpoint)
+// BANK RECONCILIATION (combined view + AJAX endpoint + ledger export)
+// Option A: Export only the visible ledger entries to Excel (CSV)
 // ========================================
 $servername = "localhost";
 $username = "root";
@@ -12,6 +13,7 @@ if ($conn->connect_error) {
     http_response_code(500);
     die("Connection failed: " . $conn->connect_error);
 }
+$conn->set_charset('utf8mb4');
 
 // --- AJAX: Update Reconciliation Status (POST) ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_brs'])) {
@@ -51,7 +53,82 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_brs'])) {
     exit;
 }
 
-// --- Load ledger data (GET) ---
+// --- If ledger_id is provided and export=excel => produce CSV for that ledger only ---
+if (isset($_GET['export']) && $_GET['export'] === 'excel' && isset($_GET['ledger_id'])) {
+    $ledger_id = intval($_GET['ledger_id']);
+    if ($ledger_id <= 0) {
+        http_response_code(400);
+        die('Invalid ledger_id for export.');
+    }
+
+    // Prepare SQL to fetch all voucher entries for ledger with reconciliation info
+    $sql = "
+        SELECT ve.entry_id, v.date, v.narration, ve.type, ve.amount,
+               COALESCE(br.is_cleared, 0) AS is_cleared, br.cleared_date
+        FROM voucher_entries ve
+        JOIN vouchers v ON ve.voucher_id = v.voucher_id
+        LEFT JOIN bank_reconciliation br ON br.voucher_entry_id = ve.entry_id
+        WHERE ve.ledger_id = ?
+        ORDER BY v.date DESC, ve.entry_id DESC
+    ";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("i", $ledger_id);
+    $stmt->execute();
+    $res = $stmt->get_result();
+
+    // Fetch ledger name for file naming
+    $lstmt = $conn->prepare("SELECT ledger_name FROM ledgers WHERE ledger_id = ? LIMIT 1");
+    $lstmt->bind_param("i", $ledger_id);
+    $lstmt->execute();
+    $lstmt->bind_result($ledger_name);
+    $lstmt->fetch();
+    $lstmt->close();
+
+    // CSV headers
+    header('Content-Type: text/csv; charset=UTF-8');
+    $filename = 'bank_reconciliation_' . ($ledger_name ? preg_replace('/[^a-z0-9_\-]/i','_', $ledger_name) : $ledger_id) . '_' . date('Ymd') . '.csv';
+    header('Content-Disposition: attachment; filename="' . $filename . '"');
+
+    // UTF-8 BOM so Excel recognizes encoding
+    echo "\xEF\xBB\xBF";
+
+    $out = fopen('php://output', 'w');
+
+    // Top header
+    fputcsv($out, ['Bank Reconciliation Statement']);
+    fputcsv($out, ['Ledger', $ledger_name ?: "Ledger #{$ledger_id}"]);
+    fputcsv($out, ['As at', date('Y-m-d')]);
+    fputcsv($out, []); // blank line
+
+    // Columns
+    fputcsv($out, ['Date', 'Narration', 'Type', 'Amount (Rs.)', 'Cleared (Yes/No)', 'Cleared Date']);
+
+    $cleared_total = 0.0;
+    $uncleared_total = 0.0;
+
+    while ($row = $res->fetch_assoc()) {
+        $date = $row['date'];
+        $narration = $row['narration'];
+        $type = $row['type'];
+        $amount = (float)$row['amount'];
+        $is_cleared = (int)$row['is_cleared'];
+        $cleared_date = $row['cleared_date'] ?: '';
+
+        fputcsv($out, [$date, $narration, $type, number_format($amount, 2, '.', ''), $is_cleared ? 'Yes' : 'No', $cleared_date]);
+
+        if ($is_cleared) $cleared_total += $amount; else $uncleared_total += $amount;
+    }
+
+    // Totals
+    fputcsv($out, []);
+    fputcsv($out, ['Cleared Total', number_format($cleared_total, 2, '.', '')]);
+    fputcsv($out, ['Uncleared Total', number_format($uncleared_total, 2, '.', '')]);
+
+    fclose($out);
+    exit;
+}
+
+// --- Load ledger data (GET) for AJAX view (same behavior as before) ---
 if (isset($_GET['ledger_id'])) {
     $ledger_id = intval($_GET['ledger_id']);
     if ($ledger_id <= 0) {
@@ -119,7 +196,7 @@ if (isset($_GET['ledger_id'])) {
     exit;
 }
 
-// --- Fetch all bank ledgers ---
+// --- Fetch all bank ledgers for the select dropdown ---
 $bankLedgers = $conn->query("
     SELECT l.ledger_id, l.ledger_name 
     FROM ledgers l
@@ -134,32 +211,32 @@ $bankLedgers = $conn->query("
 <meta charset="utf-8">
 <title>Bank Reconciliation</title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
 <style>
 body {
-  background: #f3f6f9;
+  background: #f5f7fa;
   font-family: "Segoe UI", sans-serif;
 }
 .container {
-  max-width: 1100px;
-  margin-top: 40px;
+  max-width: 1000px;
+  margin-top: 36px;
 }
 .card {
   border: none;
-  border-radius: 16px;
-  overflow: hidden;
+  border-radius: 12px;
 }
 .card-header {
-  background: linear-gradient(90deg, #198754, #28a745);
+  background: linear-gradient(90deg, #0d6efd 0%, #6610f2 100%);
   color: #fff;
 }
 .table thead th {
-  background: #e9f7ef;
+  background: #e9f7ff;
 }
 .table tbody tr:hover {
   background-color: #f8f9fa;
 }
 select.form-select {
-  border-radius: 10px;
+  border-radius: 8px;
   border-color: #ced4da;
   padding: 10px;
 }
@@ -172,15 +249,25 @@ select.form-select {
 <body>
 
 <div class="container mb-5">
-  <div class="card shadow-lg">
+  <div class="card shadow-sm">
     <div class="card-header d-flex justify-content-between align-items-center">
-      <h5 class="mb-0">🏦 Bank Reconciliation Statement</h5>
-      <button class="btn btn-light btn-sm no-print" onclick="window.print()">🖨️ Print</button>
+      <div>
+        <h5 class="mb-0"><i class="bi bi-bank"></i> Bank Reconciliation Statement</h5>
+        <small class="text-white-50">Reconcile bank ledger entries and mark cleared items</small>
+      </div>
+
+      <div class="d-flex gap-2 no-print">
+        <!-- Download Excel will include ledger_id param dynamically via JS -->
+        <a id="brsExportBtn" href="#" class="btn btn-light btn-sm">
+          <i class="bi bi-file-earmark-spreadsheet"></i> Download Excel
+        </a>
+        <a href="accounting.php" class="btn btn-light btn-sm"><i class="bi bi-arrow-left"></i> Back</a>
+      </div>
     </div>
 
     <div class="card-body">
       <label for="brsLedgerSelect" class="form-label fw-semibold">Select Bank Account:</label>
-      <select id="brsLedgerSelect" class="form-select mb-4">
+      <select id="brsLedgerSelect" class="form-select mb-4 no-print">
         <option value="">-- Choose Bank Ledger --</option>
         <?php while ($bank = $bankLedgers->fetch_assoc()): ?>
           <option value="<?= $bank['ledger_id'] ?>"><?= htmlspecialchars($bank['ledger_name']) ?></option>
@@ -192,8 +279,8 @@ select.form-select {
       </div>
     </div>
 
-    <div class="card-footer text-end no-print bg-light">
-      <a href="accounting.php" class="btn btn-outline-secondary btn-sm">← Back</a>
+    <div class="card-footer text-end bg-light no-print">
+      <small class="text-muted">Tip: Mark cleared items and then export the ledger to Excel for your records.</small>
     </div>
   </div>
 </div>
@@ -201,16 +288,32 @@ select.form-select {
 <script>
 const brsLedgerSelect = document.getElementById('brsLedgerSelect');
 const brsDet = document.getElementById('brsDet');
+const brsExportBtn = document.getElementById('brsExportBtn');
+
+// Build export link when ledger selected
+function updateExportLink(ledgerId) {
+  if (!ledgerId) {
+    brsExportBtn.setAttribute('href', '#');
+    brsExportBtn.classList.add('disabled');
+  } else {
+    // point to the same script with export & ledger_id params
+    const url = window.location.pathname + '?export=excel&ledger_id=' + encodeURIComponent(ledgerId);
+    brsExportBtn.setAttribute('href', url);
+    brsExportBtn.classList.remove('disabled');
+  }
+}
 
 // Load reconciliation for selected ledger
 function loadBankReconciliation(ledgerId) {
   if (!ledgerId) {
     brsDet.innerHTML = '<p class="text-muted">Select a bank account to view entries...</p>';
+    updateExportLink(null);
     return;
   }
+  updateExportLink(ledgerId);
   brsDet.innerHTML = `
-    <div class="text-center text-success my-4">
-      <div class="spinner-border spinner-border-sm text-success me-2"></div>
+    <div class="text-center text-primary my-4">
+      <div class="spinner-border spinner-border-sm text-primary me-2"></div>
       Loading reconciliation data...
     </div>`;
   fetch(window.location.pathname + '?ledger_id=' + encodeURIComponent(ledgerId))
@@ -228,12 +331,14 @@ function loadBankReconciliation(ledgerId) {
 // Handle dropdown change
 brsLedgerSelect.addEventListener('change', e => loadBankReconciliation(e.target.value));
 
-// Auto-load if ?id= present
+// Auto-load if ?ledger_id= present on URL
 window.addEventListener('load', () => {
-  const ledgerId = new URLSearchParams(window.location.search).get('id');
+  const ledgerId = new URLSearchParams(window.location.search).get('ledger_id');
   if (ledgerId) {
     brsLedgerSelect.value = ledgerId;
     loadBankReconciliation(ledgerId);
+  } else {
+    updateExportLink(null);
   }
 });
 
@@ -251,6 +356,7 @@ document.addEventListener('change', e => {
       .then(res => res.json())
       .then(data => {
         if (data.success) {
+          // refresh visible ledger after a short delay so DB commit completes
           setTimeout(() => loadBankReconciliation(brsLedgerSelect.value), 200);
         } else {
           console.error('Update failed:', data.error);

@@ -151,8 +151,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_brs'])) {
         .card { box-shadow: 0 0 10px rgba(0,0,0,0.1); }
         h2 { color: #0d6efd; font-weight: 700; text-align: center; margin-bottom: 20px; }
         table th, table td { text-align: center; }
-        .btn-group-custom { display: flex; gap: 10px; flex-wrap: wrap; }
-        .btn-group-custom .btn { flex: 1; min-width: 150px; }
+        .btn-group-custom { display: flex; gap: 15px; flex-wrap: wrap; }
+        .btn-group-custom .btn { flex: 1; min-width: 200px; }
     </style>
 
     <!-- Bootstrap JS Bundle (Popper included) -->
