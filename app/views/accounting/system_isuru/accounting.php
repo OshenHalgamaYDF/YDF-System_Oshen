@@ -40,7 +40,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_voucher'])) {
     $amount = $_POST['amount'];
 
     // Insert into vouchers table
-    $stmt = $conn->prepare("INSERT INTO vouchers (voucher_type, date, narration) VALUES (?, ?, ?)");
+    $stmt = $conn->prepare("INSERT INTO vouchers (voucher_type, date, narration, created_at)VALUES (?, ?, ?, NOW())");
     $stmt->bind_param("sss", $voucher_type, $date, $narration);
     $stmt->execute();
     $voucher_id = $conn->insert_id;
