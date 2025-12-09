@@ -1,5 +1,5 @@
 <?php
-// trial_balance.php - Cleaned / optimized + suspense handling
+// trial_balance.php - Cleaned / optimized + suspense handling + date range filter
 // ---------------------------------------------------------
 // Assumes tables: account_groups(group_id, group_name, group_type),
 //                 ledgers(ledger_id, ledger_name, opening_balance, balance_type, group_id),
@@ -17,6 +17,10 @@ $conn = new mysqli($servername, $username, $password, $database);
 $conn->set_charset('utf8mb4');
 
 $suspense_message = '';
+
+// --- Handle date range filter ---
+$filter_from = isset($_GET['filter_from']) ? $_GET['filter_from'] : date('Y-01-01');
+$filter_to = isset($_GET['filter_to']) ? $_GET['filter_to'] : date('Y-m-d');
 
 // --- Handle create suspense POST ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_suspense'])) {
@@ -101,23 +105,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_suspense'])) {
     }
 }
 
-// --- Query ledgers with net balance calculation ---
-// We'll show only non-zero balances (ABS > 0.009) to keep TB clean, but always include Suspense Account if present.
+// --- Query ledgers with net balance calculation (with date range filter) ---
 $q = $conn->query("
     SELECT 
         l.ledger_id,
         l.ledger_name,
         l.opening_balance,
         l.balance_type,
-        COALESCE(SUM(CASE WHEN ve.type='Dr' THEN ve.amount ELSE 0 END),0) AS total_dr,
-        COALESCE(SUM(CASE WHEN ve.type='Cr' THEN ve.amount ELSE 0 END),0) AS total_cr,
+        COALESCE(SUM(CASE WHEN ve.type='Dr' AND v.date >= '$filter_from' AND v.date <= '$filter_to' THEN ve.amount ELSE 0 END),0) AS total_dr,
+        COALESCE(SUM(CASE WHEN ve.type='Cr' AND v.date >= '$filter_from' AND v.date <= '$filter_to' THEN ve.amount ELSE 0 END),0) AS total_cr,
         (
           (CASE WHEN UPPER(l.balance_type)='DR' THEN COALESCE(l.opening_balance,0) ELSE -COALESCE(l.opening_balance,0) END)
-          + COALESCE(SUM(CASE WHEN ve.type='Dr' THEN ve.amount ELSE 0 END),0)
-          - COALESCE(SUM(CASE WHEN ve.type='Cr' THEN ve.amount ELSE 0 END),0)
+          + COALESCE(SUM(CASE WHEN ve.type='Dr' AND v.date >= '$filter_from' AND v.date <= '$filter_to' THEN ve.amount ELSE 0 END),0)
+          - COALESCE(SUM(CASE WHEN ve.type='Cr' AND v.date >= '$filter_from' AND v.date <= '$filter_to' THEN ve.amount ELSE 0 END),0)
         ) AS net_balance
     FROM ledgers l
     LEFT JOIN voucher_entries ve ON l.ledger_id = ve.ledger_id
+    LEFT JOIN vouchers v ON ve.voucher_id = v.voucher_id
     GROUP BY l.ledger_id, l.ledger_name, l.opening_balance, l.balance_type
     HAVING ABS(net_balance) > 0.009 OR LOWER(l.ledger_name) = 'suspense account'
     ORDER BY l.ledger_name ASC
@@ -134,11 +138,12 @@ if ($q && $q->num_rows > 0) {
 // --- Income / Expense summary for Net Income (Retained earnings) ---
 $summary = $conn->query("
     SELECT
-      COALESCE(SUM(CASE WHEN g.group_type='Income' THEN ve.amount * (CASE WHEN ve.type='Cr' THEN 1 WHEN ve.type='Dr' THEN -1 ELSE 0 END) ELSE 0 END),0) AS income_net,
-      COALESCE(SUM(CASE WHEN g.group_type='Expense' THEN ve.amount * (CASE WHEN ve.type='Dr' THEN 1 WHEN ve.type='Cr' THEN -1 ELSE 0 END) ELSE 0 END),0) AS expense_net
+      COALESCE(SUM(CASE WHEN g.group_type='Income' AND v.date >= '$filter_from' AND v.date <= '$filter_to' THEN ve.amount * (CASE WHEN ve.type='Cr' THEN 1 WHEN ve.type='Dr' THEN -1 ELSE 0 END) ELSE 0 END),0) AS income_net,
+      COALESCE(SUM(CASE WHEN g.group_type='Expense' AND v.date >= '$filter_from' AND v.date <= '$filter_to' THEN ve.amount * (CASE WHEN ve.type='Dr' THEN 1 WHEN ve.type='Cr' THEN -1 ELSE 0 END) ELSE 0 END),0) AS expense_net
     FROM voucher_entries ve
     JOIN ledgers l ON ve.ledger_id = l.ledger_id
     JOIN account_groups g ON l.group_id = g.group_id
+    JOIN vouchers v ON ve.voucher_id = v.voucher_id
     WHERE g.group_type IN ('Income','Expense')
 ");
 $summaryData = $summary->fetch_assoc();
@@ -150,13 +155,13 @@ $net_income   = $income_net - $expense_net;
 if (isset($_GET['export']) && $_GET['export'] === 'excel') {
     // Send a UTF-8 CSV that Excel can open
     header('Content-Type: text/csv; charset=UTF-8');
-    header('Content-Disposition: attachment; filename="trial_balance_as_at_' . date('Y-m-d') . '.csv"');
+    header('Content-Disposition: attachment; filename="trial_balance_' . $filter_from . '_to_' . $filter_to . '.csv"');
     // UTF-8 BOM for Excel
     echo "\xEF\xBB\xBF";
     $out = fopen('php://output', 'w');
 
     // Header row
-    fputcsv($out, ['Trial Balance as at ' . date('Y-m-d')]);
+    fputcsv($out, ['Trial Balance from ' . $filter_from . ' to ' . $filter_to]);
     fputcsv($out, ['Account', 'Debit (Rs.)', 'Credit (Rs.)']);
 
     $totalDr = 0.0;
@@ -198,7 +203,7 @@ if (isset($_GET['export']) && $_GET['export'] === 'excel') {
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
   <style>
     body { background-color: #f5f7fa; }
-    .container { max-width: 1000px; margin-top: 36px; }
+    .container { max-width: 1200px; margin-top: 36px; }
     @media print { .no-print { display:none !important; } }
     .muted-small { font-size:0.85rem; color:#666; }
   </style>
@@ -214,10 +219,35 @@ if (isset($_GET['export']) && $_GET['export'] === 'excel') {
           <small class="muted-small">Verify debit and credit totals match</small>
         </div>
         <div class="d-flex gap-2 no-print">
-          <!-- Changed: Download Excel instead of browser print -->
-          <a href="?export=excel" class="btn btn-light btn-sm"><i class="bi bi-file-earmark-spreadsheet"></i> Download Excel</a>
+          <a href="?export=excel&filter_from=<?= htmlspecialchars($filter_from) ?>&filter_to=<?= htmlspecialchars($filter_to) ?>" class="btn btn-light btn-sm"><i class="bi bi-file-earmark-spreadsheet"></i> Download Excel</a>
           <a href="accounting.php" class="btn btn-light btn-sm"><i class="bi bi-arrow-left"></i> Back</a>
         </div>
+      </div>
+
+      <!-- Date Range Filter Section -->
+      <div class="card-header bg-light no-print">
+        <form method="GET" class="row g-2 align-items-end">
+          <div class="col-md-2">
+            <label for="filter_from" class="form-label fw-bold">From Date:</label>
+            <input type="date" id="filter_from" name="filter_from" class="form-control" value="<?= htmlspecialchars($filter_from) ?>" required>
+          </div>
+          <div class="col-md-2">
+            <label for="filter_to" class="form-label fw-bold">To Date:</label>
+            <input type="date" id="filter_to" name="filter_to" class="form-control" value="<?= htmlspecialchars($filter_to) ?>" required>
+          </div>
+          <div class="col-auto">
+            <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-funnel"></i> Apply Filter</button>
+          </div>
+          <div class="col-auto">
+            <a href="?filter_from=<?= date('Y-01-01') ?>&filter_to=<?= date('Y-m-d') ?>" class="btn btn-secondary btn-sm"><i class="bi bi-calendar-range"></i> This Year</a>
+          </div>
+          <div class="col-auto">
+            <a href="?filter_from=<?= date('Y-m-01') ?>&filter_to=<?= date('Y-m-d') ?>" class="btn btn-secondary btn-sm"><i class="bi bi-calendar"></i> This Month</a>
+          </div>
+          <div class="col-auto ms-auto">
+            <small class="text-muted"><strong><?= date('M d, Y', strtotime($filter_from)) ?></strong> to <strong><?= date('M d, Y', strtotime($filter_to)) ?></strong></small>
+          </div>
+        </form>
       </div>
 
       <div class="card-body table-responsive">

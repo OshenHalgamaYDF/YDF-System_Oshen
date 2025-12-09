@@ -1,6 +1,6 @@
 <?php
 // ========================================
-// VIEW LEDGER (combined AJAX partial + full page) with Export only
+// VIEW LEDGER (combined AJAX partial + full page) with Export + Date range filter
 // ========================================
 $servername = "localhost";
 $username   = "root";
@@ -14,6 +14,15 @@ if ($conn->connect_error) {
     exit;
 }
 $conn->set_charset('utf8mb4');
+
+// --- Helper: validate date ---
+function valid_date($d) {
+    return (bool) preg_match('/^\d{4}-\d{2}-\d{2}$/', $d);
+}
+
+// --- Read date range filter (GET) similar to Trial Balance / BRS ---
+$filter_from = isset($_GET['filter_from']) && valid_date($_GET['filter_from']) ? $_GET['filter_from'] : date('Y-01-01');
+$filter_to   = isset($_GET['filter_to']) && valid_date($_GET['filter_to']) ? $_GET['filter_to'] : date('Y-m-d');
 
 // Accept either 'id' or 'ledger_id' for compatibility
 $ledgerIdParam = isset($_GET['ledger_id']) ? 'ledger_id' : (isset($_GET['id']) ? 'id' : null);
@@ -46,23 +55,23 @@ if ($ledgerIdParam && isset($_GET['export']) && $_GET['export'] === 'excel') {
         SELECT v.date, v.voucher_type, ve.type, ve.amount, v.narration, v.voucher_id
         FROM voucher_entries ve
         JOIN vouchers v ON ve.voucher_id = v.voucher_id
-        WHERE ve.ledger_id = ?
+        WHERE ve.ledger_id = ? AND v.date >= ? AND v.date <= ?
         ORDER BY v.date ASC, v.voucher_id ASC
     ");
-    $tstmt->bind_param("i", $id);
+    $tstmt->bind_param("iss", $id, $filter_from, $filter_to);
     $tstmt->execute();
     $q = $tstmt->get_result();
 
     header('Content-Type: text/csv; charset=UTF-8');
     $safeName = preg_replace('/[^a-z0-9_\-]/i','_', $ledger_name ?: 'ledger_'.$id);
-    $filename = "ledger_{$safeName}_" . date('Ymd') . ".csv";
+    $filename = "ledger_{$safeName}_" . $filter_from . "_to_" . $filter_to . ".csv";
     header('Content-Disposition: attachment; filename="'.$filename.'"');
 
     echo "\xEF\xBB\xBF";
     $out = fopen('php://output', 'w');
 
     fputcsv($out, ["Ledger:",$ledger_name]);
-    fputcsv($out, ["As at:", date('Y-m-d')]);
+    fputcsv($out, ["Period:", $filter_from . ' to ' . $filter_to]);
     fputcsv($out, []);
     fputcsv($out, ['Date','Voucher Type','Voucher ID','Dr Amount','Cr Amount','Running Balance','Balance Type','Narration']);
 
@@ -135,14 +144,14 @@ if ($ledgerIdParam) {
         SELECT v.date, v.voucher_type, ve.type, ve.amount, v.narration, v.voucher_id
         FROM voucher_entries ve
         JOIN vouchers v ON ve.voucher_id = v.voucher_id
-        WHERE ve.ledger_id = ?
+        WHERE ve.ledger_id = ? AND v.date >= ? AND v.date <= ?
         ORDER BY v.date ASC, v.voucher_id ASC
     ");
     if (!$tstmt) {
         echo "<div class='alert alert-danger'>Query error: " . htmlspecialchars($conn->error) . "</div>";
         exit;
     }
-    $tstmt->bind_param("i", $id);
+    $tstmt->bind_param("iss", $id, $filter_from, $filter_to);
     $tstmt->execute();
     $q = $tstmt->get_result();
 
@@ -158,10 +167,7 @@ if ($ledgerIdParam) {
           <h5 class="mb-0">📘 Ledger: <?= $ledger_name ?></h5>
           <small class="text-white-50">Opening: <?= number_format($opening_balance,2) ?> <?= $balance_type ?></small>
         </div>
-        <!-- Export only -->
-        <a href="?id=<?= $id ?>&export=excel" class="btn btn-light btn-sm" title="Download ledger as Excel (CSV)">
-            <i class="bi bi-file-earmark-spreadsheet"></i> Export Excel
-        </a>
+        <!-- Export removed here — use the Export Selected (bottom) button with date filter -->
       </div>
 
       <div class="card-body">
@@ -170,8 +176,10 @@ if ($ledgerIdParam) {
           <div class="col-md-6 text-end"><strong>Current Balance:</strong> <span id="ledgerCurrentBalance"><?= number_format(abs($running_balance),2) ?> <?= ($running_balance >= 0 ? 'Dr' : 'Cr') ?></span></div>
         </div>
 
+        <div class="mb-2 text-muted">Showing entries from <strong><?= htmlspecialchars($filter_from) ?></strong> to <strong><?= htmlspecialchars($filter_to) ?></strong></div>
+
         <?php if (!$q || $q->num_rows === 0): ?>
-          <div class="alert alert-info">No transactions found for this ledger.</div>
+          <div class="alert alert-info">No transactions found for this ledger in the selected period.</div>
         <?php else: ?>
           <div class="table-responsive">
             <table class="table table-sm table-bordered table-hover">
@@ -208,6 +216,15 @@ if ($ledgerIdParam) {
                 </tr>
               <?php endwhile; ?>
               </tbody>
+              <tfoot class="fw-bold">
+                <tr>
+                  <td colspan="3" class="text-end">Totals</td>
+                  <td class="text-end"><?= number_format($totalDr,2) ?></td>
+                  <td class="text-end"><?= number_format($totalCr,2) ?></td>
+                  <td class="text-end"><?= number_format(abs($running_balance),2) ?> <?= $running_balance>=0?'Dr':'Cr' ?></td>
+                  <td></td>
+                </tr>
+              </tfoot>
             </table>
           </div>
         <?php endif; ?>
@@ -234,7 +251,7 @@ $ledgers = $conn->query("SELECT ledger_id, ledger_name FROM ledgers ORDER BY led
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
-  <style> body { background:#f5f7fa } .container{ max-width:1100px; margin-top:32px }</style>
+  <style> body { background:#f5f7fa } .container{ max-width:1100px; margin-top:32px } .btn.disabled {pointer-events: none;opacity: 0.65;}</style>
 </head>
 <body>
   <div class="container">
@@ -248,7 +265,7 @@ $ledgers = $conn->query("SELECT ledger_id, ledger_name FROM ledgers ORDER BY led
       </div>
       <div class="card-body">
         <div class="row g-3 mb-3 align-items-end">
-          <div class="col-md-12">
+          <div class="col-md-6">
             <label for="ledgerSelect" class="form-label fw-semibold">Select Ledger</label>
             <select id="ledgerSelect" class="form-select">
               <option value="">-- Select a ledger --</option>
@@ -257,6 +274,22 @@ $ledgers = $conn->query("SELECT ledger_id, ledger_name FROM ledgers ORDER BY led
               <?php endwhile; ?>
             </select>
           </div>
+
+          <div class="col-md-3">
+            <label for="filter_from" class="form-label fw-semibold">From</label>
+            <input type="date" id="filter_from" class="form-control" value="<?= htmlspecialchars($filter_from) ?>">
+          </div>
+          <div class="col-md-3">
+            <label for="filter_to" class="form-label fw-semibold">To</label>
+            <input type="date" id="filter_to" class="form-control" value="<?= htmlspecialchars($filter_to) ?>">
+          </div>
+        </div>
+
+        <div class="d-flex gap-2 mb-3 no-print">
+          <button id="applyFilter" class="btn btn-primary btn-sm"><i class="bi bi-funnel"></i> Apply Filter</button>
+          <button id="thisYearBtn" class="btn btn-secondary btn-sm">This Year</button>
+          <button id="thisMonthBtn" class="btn btn-secondary btn-sm">This Month</button>
+          <a id="exportAllBtn" class="btn btn-success btn-sm ms-auto disabled" href="#" target="_blank"><i class="bi bi-file-earmark-spreadsheet"></i> Export Selected</a>
         </div>
 
         <div id="ledgerDetails">
@@ -270,15 +303,45 @@ $ledgers = $conn->query("SELECT ledger_id, ledger_name FROM ledgers ORDER BY led
 (function(){
   const select = document.getElementById('ledgerSelect');
   const details = document.getElementById('ledgerDetails');
+  const fromInput = document.getElementById('filter_from');
+  const toInput = document.getElementById('filter_to');
+  const applyBtn = document.getElementById('applyFilter');
+  const thisYearBtn = document.getElementById('thisYearBtn');
+  const thisMonthBtn = document.getElementById('thisMonthBtn');
+  const exportBtn = document.getElementById('exportAllBtn');
+
+  function buildAjaxUrl(id) {
+    const base = window.location.pathname;
+    const params = new URLSearchParams();
+    params.set('id', id);
+    params.set('filter_from', fromInput.value);
+    params.set('filter_to', toInput.value);
+    return base + '?' + params.toString();
+  }
+
+  function buildExportUrl(id) {
+    const base = window.location.pathname;
+    const params = new URLSearchParams();
+    params.set('id', id);
+    params.set('export', 'excel');
+    params.set('filter_from', fromInput.value);
+    params.set('filter_to', toInput.value);
+    return base + '?' + params.toString();
+  }
 
   async function loadLedger(id) {
     if (!id) {
       details.innerHTML = '<p class="text-muted">Select a ledger to view details...</p>';
+      exportBtn.setAttribute('href', '#');
+      exportBtn.classList.add('disabled');
       return;
     }
+    exportBtn.setAttribute('href', buildExportUrl(id));
+    exportBtn.classList.remove('disabled');
+
     details.innerHTML = '<div class="text-center py-3"><div class="spinner-border text-info spinner-border-sm" role="status"></div> Loading...</div>';
     try {
-      const resp = await fetch(window.location.pathname + '?id=' + encodeURIComponent(id), { cache: 'no-store' });
+      const resp = await fetch(buildAjaxUrl(id), { cache: 'no-store' });
       if (!resp.ok) throw new Error('Server returned ' + resp.status);
       const html = await resp.text();
       details.innerHTML = html;
@@ -290,10 +353,30 @@ $ledgers = $conn->query("SELECT ledger_id, ledger_name FROM ledgers ORDER BY led
   }
 
   select.addEventListener('change', () => loadLedger(select.value));
+  applyBtn.addEventListener('click', () => loadLedger(select.value));
+
+  thisYearBtn.addEventListener('click', (ev) => {
+    ev.preventDefault();
+    const y = new Date().getFullYear();
+    fromInput.value = y + '-01-01';
+    toInput.value = new Date().toISOString().slice(0,10);
+    loadLedger(select.value);
+  });
+  thisMonthBtn.addEventListener('click', (ev) => {
+    ev.preventDefault();
+    const now = new Date();
+    fromInput.value = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-01';
+    toInput.value = new Date().toISOString().slice(0,10);
+    loadLedger(select.value);
+  });
 
   window.addEventListener('load', () => {
     const params = new URLSearchParams(window.location.search);
     const id = params.get('id') || params.get('ledger_id');
+    const f = params.get('filter_from');
+    const t = params.get('filter_to');
+    if (f) fromInput.value = f;
+    if (t) toInput.value = t;
     if (id) {
       select.value = id;
       loadLedger(id);

@@ -1,7 +1,7 @@
 <?php
 // ========================================
 // BANK RECONCILIATION (combined view + AJAX endpoint + ledger export)
-// Option A: Export only the visible ledger entries to Excel (CSV)
+// Added date range filter (filter_from, filter_to) to AJAX ledger view and export
 // ========================================
 $servername = "localhost";
 $username = "root";
@@ -14,6 +14,10 @@ if ($conn->connect_error) {
     die("Connection failed: " . $conn->connect_error);
 }
 $conn->set_charset('utf8mb4');
+
+// --- Date range filter (from/to) ---
+$filter_from = isset($_GET['filter_from']) && $_GET['filter_from'] ? $_GET['filter_from'] : date('Y-01-01');
+$filter_to   = isset($_GET['filter_to']) && $_GET['filter_to'] ? $_GET['filter_to'] : date('Y-m-d');
 
 // --- AJAX: Update Reconciliation Status (POST) ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_brs'])) {
@@ -53,7 +57,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_brs'])) {
     exit;
 }
 
-// --- If ledger_id is provided and export=excel => produce CSV for that ledger only ---
+// --- If ledger_id is provided and export=excel => produce CSV for that ledger only (respect date range) ---
 if (isset($_GET['export']) && $_GET['export'] === 'excel' && isset($_GET['ledger_id'])) {
     $ledger_id = intval($_GET['ledger_id']);
     if ($ledger_id <= 0) {
@@ -61,18 +65,18 @@ if (isset($_GET['export']) && $_GET['export'] === 'excel' && isset($_GET['ledger
         die('Invalid ledger_id for export.');
     }
 
-    // Prepare SQL to fetch all voucher entries for ledger with reconciliation info
+    // Prepare SQL to fetch all voucher entries for ledger with reconciliation info, limited by date range
     $sql = "
         SELECT ve.entry_id, v.date, v.narration, ve.type, ve.amount,
                COALESCE(br.is_cleared, 0) AS is_cleared, br.cleared_date
         FROM voucher_entries ve
         JOIN vouchers v ON ve.voucher_id = v.voucher_id
         LEFT JOIN bank_reconciliation br ON br.voucher_entry_id = ve.entry_id
-        WHERE ve.ledger_id = ?
+        WHERE ve.ledger_id = ? AND v.date >= ? AND v.date <= ?
         ORDER BY v.date DESC, ve.entry_id DESC
     ";
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("i", $ledger_id);
+    $stmt->bind_param("iss", $ledger_id, $filter_from, $filter_to);
     $stmt->execute();
     $res = $stmt->get_result();
 
@@ -86,7 +90,8 @@ if (isset($_GET['export']) && $_GET['export'] === 'excel' && isset($_GET['ledger
 
     // CSV headers
     header('Content-Type: text/csv; charset=UTF-8');
-    $filename = 'bank_reconciliation_' . ($ledger_name ? preg_replace('/[^a-z0-9_\-]/i','_', $ledger_name) : $ledger_id) . '_' . date('Ymd') . '.csv';
+    $safeName = $ledger_name ? preg_replace('/[^a-z0-9_\-]/i','_', $ledger_name) : $ledger_id;
+    $filename = 'bank_reconciliation_' . $safeName . '_' . $filter_from . '_to_' . $filter_to . '.csv';
     header('Content-Disposition: attachment; filename="' . $filename . '"');
 
     // UTF-8 BOM so Excel recognizes encoding
@@ -97,7 +102,7 @@ if (isset($_GET['export']) && $_GET['export'] === 'excel' && isset($_GET['ledger
     // Top header
     fputcsv($out, ['Bank Reconciliation Statement']);
     fputcsv($out, ['Ledger', $ledger_name ?: "Ledger #{$ledger_id}"]);
-    fputcsv($out, ['As at', date('Y-m-d')]);
+    fputcsv($out, ['Period', $filter_from . ' to ' . $filter_to]);
     fputcsv($out, []); // blank line
 
     // Columns
@@ -128,7 +133,7 @@ if (isset($_GET['export']) && $_GET['export'] === 'excel' && isset($_GET['ledger
     exit;
 }
 
-// --- Load ledger data (GET) for AJAX view (same behavior as before) ---
+// --- Load ledger data (GET) for AJAX view (same behavior as before) but respect date range ---
 if (isset($_GET['ledger_id'])) {
     $ledger_id = intval($_GET['ledger_id']);
     if ($ledger_id <= 0) {
@@ -142,16 +147,16 @@ if (isset($_GET['ledger_id'])) {
         FROM voucher_entries ve
         JOIN vouchers v ON ve.voucher_id = v.voucher_id
         LEFT JOIN bank_reconciliation br ON br.voucher_entry_id = ve.entry_id
-        WHERE ve.ledger_id = ?
+        WHERE ve.ledger_id = ? AND v.date >= ? AND v.date <= ?
         ORDER BY v.date DESC, ve.entry_id DESC
     ";
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("i", $ledger_id);
+    $stmt->bind_param("iss", $ledger_id, $filter_from, $filter_to);
     $stmt->execute();
     $res = $stmt->get_result();
 
     if ($res->num_rows === 0) {
-        echo '<p class="text-muted text-center my-3">No entries found for this bank account.</p>';
+        echo '<p class="text-muted text-center my-3">No entries found for this bank account in the selected period.</p>';
         $stmt->close();
         exit;
     }
@@ -160,6 +165,7 @@ if (isset($_GET['ledger_id'])) {
     $uncleared_total = 0.0;
 
     echo '<div class="table-responsive">';
+    echo '<div class="mb-2 text-muted">Showing entries from <strong>' . htmlspecialchars($filter_from) . '</strong> to <strong>' . htmlspecialchars($filter_to) . '</strong></div>';
     echo '<table class="table table-bordered align-middle shadow-sm">';
     echo '<thead class="table-success text-center">';
     echo '<tr><th>Date</th><th>Narration</th><th>Type</th><th class="text-end">Amount (Rs)</th><th class="no-print">Cleared</th></tr>';
@@ -257,7 +263,7 @@ select.form-select {
       </div>
 
       <div class="d-flex gap-2 no-print">
-        <!-- Download Excel will include ledger_id param dynamically via JS -->
+        <!-- Download Excel will include ledger_id + date range params dynamically via JS -->
         <a id="brsExportBtn" href="#" class="btn btn-light btn-sm">
           <i class="bi bi-file-earmark-spreadsheet"></i> Download Excel
         </a>
@@ -266,16 +272,42 @@ select.form-select {
     </div>
 
     <div class="card-body">
-      <label for="brsLedgerSelect" class="form-label fw-semibold">Select Bank Account:</label>
-      <select id="brsLedgerSelect" class="form-select mb-4 no-print">
-        <option value="">-- Choose Bank Ledger --</option>
-        <?php while ($bank = $bankLedgers->fetch_assoc()): ?>
-          <option value="<?= $bank['ledger_id'] ?>"><?= htmlspecialchars($bank['ledger_name']) ?></option>
-        <?php endwhile; ?>
-      </select>
+      <div class="row g-2 align-items-end mb-3 no-print">
+        <div class="col-md-4">
+          <label for="brsLedgerSelect" class="form-label fw-semibold">Select Bank Account:</label>
+          <select id="brsLedgerSelect" class="form-select">
+            <option value="">-- Choose Bank Ledger --</option>
+            <?php while ($bank = $bankLedgers->fetch_assoc()): ?>
+              <option value="<?= $bank['ledger_id'] ?>"><?= htmlspecialchars($bank['ledger_name']) ?></option>
+            <?php endwhile; ?>
+          </select>
+        </div>
+
+        <div class="col-md-2">
+          <label for="filter_from" class="form-label fw-semibold">From:</label>
+          <input type="date" id="filter_from" name="filter_from" class="form-control" value="<?= htmlspecialchars($filter_from) ?>">
+        </div>
+        <div class="col-md-2">
+          <label for="filter_to" class="form-label fw-semibold">To:</label>
+          <input type="date" id="filter_to" name="filter_to" class="form-control" value="<?= htmlspecialchars($filter_to) ?>">
+        </div>
+
+        <div class="col-auto">
+          <button id="brsApplyBtn" class="btn btn-primary mt-2"><i class="bi bi-funnel"></i> Apply Filter</button>
+        </div>
+
+        <div class="col-auto mt-2">
+          <a id="thisYearBtn" href="#" class="btn btn-secondary btn-sm mt-2"><i class="bi bi-calendar-range"></i> This Year</a>
+          <a id="thisMonthBtn" href="#" class="btn btn-secondary btn-sm mt-2"><i class="bi bi-calendar"></i> This Month</a>
+        </div>
+
+        <div class="col-auto ms-auto align-self-end">
+          <small class="text-muted">Showing period: <strong id="brsPeriod"><?= htmlspecialchars(date('M d, Y', strtotime($filter_from))) ?> to <?= htmlspecialchars(date('M d, Y', strtotime($filter_to))) ?></strong></small>
+        </div>
+      </div>
 
       <div id="brsDet" class="mt-4 text-center text-muted">
-        <p>Select a bank account to view reconciliation entries...</p>
+        <p>Select a bank account and period to view reconciliation entries...</p>
       </div>
     </div>
 
@@ -289,34 +321,48 @@ select.form-select {
 const brsLedgerSelect = document.getElementById('brsLedgerSelect');
 const brsDet = document.getElementById('brsDet');
 const brsExportBtn = document.getElementById('brsExportBtn');
+const brsApplyBtn = document.getElementById('brsApplyBtn');
+const filterFromInput = document.getElementById('filter_from');
+const filterToInput = document.getElementById('filter_to');
+const brsPeriod = document.getElementById('brsPeriod');
+const thisYearBtn = document.getElementById('thisYearBtn');
+const thisMonthBtn = document.getElementById('thisMonthBtn');
 
-// Build export link when ledger selected
+// Build export link when ledger selected and period set
 function updateExportLink(ledgerId) {
+  const from = filterFromInput.value;
+  const to = filterToInput.value;
   if (!ledgerId) {
     brsExportBtn.setAttribute('href', '#');
     brsExportBtn.classList.add('disabled');
   } else {
-    // point to the same script with export & ledger_id params
-    const url = window.location.pathname + '?export=excel&ledger_id=' + encodeURIComponent(ledgerId);
+    const url = window.location.pathname + '?export=excel&ledger_id=' + encodeURIComponent(ledgerId)
+                + '&filter_from=' + encodeURIComponent(from)
+                + '&filter_to=' + encodeURIComponent(to);
     brsExportBtn.setAttribute('href', url);
     brsExportBtn.classList.remove('disabled');
   }
 }
 
-// Load reconciliation for selected ledger
+// Load reconciliation for selected ledger and period
 function loadBankReconciliation(ledgerId) {
+  const from = filterFromInput.value;
+  const to = filterToInput.value;
   if (!ledgerId) {
     brsDet.innerHTML = '<p class="text-muted">Select a bank account to view entries...</p>';
     updateExportLink(null);
     return;
   }
   updateExportLink(ledgerId);
+  brsPeriod.textContent = new Date(from).toLocaleDateString() + ' to ' + new Date(to).toLocaleDateString();
   brsDet.innerHTML = `
     <div class="text-center text-primary my-4">
       <div class="spinner-border spinner-border-sm text-primary me-2"></div>
       Loading reconciliation data...
     </div>`;
-  fetch(window.location.pathname + '?ledger_id=' + encodeURIComponent(ledgerId))
+  fetch(window.location.pathname + '?ledger_id=' + encodeURIComponent(ledgerId)
+        + '&filter_from=' + encodeURIComponent(from)
+        + '&filter_to=' + encodeURIComponent(to))
     .then(res => {
       if (!res.ok) throw new Error('HTTP ' + res.status);
       return res.text();
@@ -329,11 +375,48 @@ function loadBankReconciliation(ledgerId) {
 }
 
 // Handle dropdown change
-brsLedgerSelect.addEventListener('change', e => loadBankReconciliation(e.target.value));
+brsLedgerSelect.addEventListener('change', e => {
+  const ledgerId = e.target.value;
+  loadBankReconciliation(ledgerId);
+});
 
-// Auto-load if ?ledger_id= present on URL
+// Apply filter button
+brsApplyBtn.addEventListener('click', () => {
+  const ledgerId = brsLedgerSelect.value;
+  if (!ledgerId) {
+    // update export link anyway
+    updateExportLink(null);
+    brsDet.innerHTML = '<p class="text-muted">Select a bank account to view entries...</p>';
+    return;
+  }
+  loadBankReconciliation(ledgerId);
+});
+
+// Quick buttons
+thisYearBtn.addEventListener('click', (ev) => {
+  ev.preventDefault();
+  const y = new Date().getFullYear();
+  filterFromInput.value = y + '-01-01';
+  filterToInput.value = new Date().toISOString().slice(0,10);
+  brsApplyBtn.click();
+});
+thisMonthBtn.addEventListener('click', (ev) => {
+  ev.preventDefault();
+  const now = new Date();
+  const first = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-01';
+  filterFromInput.value = first;
+  filterToInput.value = new Date().toISOString().slice(0,10);
+  brsApplyBtn.click();
+});
+
+// Auto-load if ?ledger_id= present on URL (and optional date params)
 window.addEventListener('load', () => {
-  const ledgerId = new URLSearchParams(window.location.search).get('ledger_id');
+  const params = new URLSearchParams(window.location.search);
+  const ledgerId = params.get('ledger_id');
+  const f = params.get('filter_from');
+  const t = params.get('filter_to');
+  if (f) filterFromInput.value = f;
+  if (t) filterToInput.value = t;
   if (ledgerId) {
     brsLedgerSelect.value = ledgerId;
     loadBankReconciliation(ledgerId);
