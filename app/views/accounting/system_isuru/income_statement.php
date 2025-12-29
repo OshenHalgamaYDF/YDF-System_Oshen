@@ -32,7 +32,7 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\system_isur
         <!-- Date Range Filter (styled like Trial Balance) -->
         <div class="card-header bg-light no-print">
             <form method="GET" class="row g-2 align-items-end">
-                <div class="col-md-3">
+                <div class="col-md-3">                         
                     <label for="filter_from" class="form-label fw-bold">From Date:</label>
                     <input type="date" id="filter_from" name="filter_from" class="form-control" value="<?= htmlspecialchars($filter_from) ?>" required>
                 </div>

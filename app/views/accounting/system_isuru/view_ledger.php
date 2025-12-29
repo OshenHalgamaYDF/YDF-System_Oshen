@@ -24,13 +24,13 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\system_isur
             <div class="card-body">
                 <div class="row g-3 mb-3 align-items-end">
                     <div class="col-md-6">
-                      <label for="ledgerSelect" class="form-label fw-semibold">Select Ledger</label>
-                        <select id="ledgerSelect" class="form-select">
-                          <option value="">-- Select a ledger --</option>
-                          <?php while ($l = $ledgers->fetch_assoc()): ?>
-                            <option value="<?= (int)$l['ledger_id'] ?>"><?= htmlspecialchars($l['ledger_name']) ?></option>
-                          <?php endwhile; ?>
-                        </select>
+                        <label for="ledgerSelect" class="form-label fw-semibold">Select Ledger</label>
+                            <select id="ledgerSelect" class="form-select">
+                                <option value="">-- Select a ledger --</option>
+                                <?php while ($l = $ledgers->fetch_assoc()): ?>
+                                    <option value="<?= (int)$l['ledger_id'] ?>"><?= htmlspecialchars($l['ledger_name']) ?></option>
+                                <?php endwhile; ?>
+                            </select>
                     </div>
                     <div class="col-md-3">
                         <label for="filter_from" class="form-label fw-semibold">From</label>
@@ -56,87 +56,87 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\system_isur
 
 <script>
 (function(){
-  const select = document.getElementById('ledgerSelect');
-  const details = document.getElementById('ledgerDetails');
-  const fromInput = document.getElementById('filter_from');
-  const toInput = document.getElementById('filter_to');
-  const applyBtn = document.getElementById('applyFilter');
-  const thisYearBtn = document.getElementById('thisYearBtn');
-  const thisMonthBtn = document.getElementById('thisMonthBtn');
-  const exportBtn = document.getElementById('exportAllBtn');
+    const select = document.getElementById('ledgerSelect');
+    const details = document.getElementById('ledgerDetails');
+    const fromInput = document.getElementById('filter_from');
+    const toInput = document.getElementById('filter_to');
+    const applyBtn = document.getElementById('applyFilter');
+    const thisYearBtn = document.getElementById('thisYearBtn');
+    const thisMonthBtn = document.getElementById('thisMonthBtn');
+    const exportBtn = document.getElementById('exportAllBtn');
 
-  function buildAjaxUrl(id) {
-    const base = window.location.pathname;
-    const params = new URLSearchParams();
-    params.set('id', id);
-    params.set('filter_from', fromInput.value);
-    params.set('filter_to', toInput.value);
-    return base + '?' + params.toString();
-  }
-
-  function buildExportUrl(id) {
-    const base = window.location.pathname;
-    const params = new URLSearchParams();
-    params.set('id', id);
-    params.set('export', 'excel');
-    params.set('filter_from', fromInput.value);
-    params.set('filter_to', toInput.value);
-    return base + '?' + params.toString();
-  }
-
-  async function loadLedger(id) {
-    if (!id) {
-      details.innerHTML = '<p class="text-muted">Select a ledger to view details...</p>';
-      exportBtn.setAttribute('href', '#');
-      exportBtn.classList.add('disabled');
-      return;
+    function buildAjaxUrl(id) {
+        const base = window.location.pathname;
+        const params = new URLSearchParams();
+        params.set('id', id);
+        params.set('filter_from', fromInput.value);
+        params.set('filter_to', toInput.value);
+        return base + '?' + params.toString();
     }
-    exportBtn.setAttribute('href', buildExportUrl(id));
-    exportBtn.classList.remove('disabled');
 
-    details.innerHTML = '<div class="text-center py-3"><div class="spinner-border text-info spinner-border-sm" role="status"></div> Loading...</div>';
-    try {
-      const resp = await fetch(buildAjaxUrl(id), { cache: 'no-store' });
-      if (!resp.ok) throw new Error('Server returned ' + resp.status);
-      const html = await resp.text();
-      details.innerHTML = html;
-      window.scrollTo({ top: details.offsetTop - 20, behavior: 'smooth' });
-    } catch (err) {
-      console.error(err);
-      details.innerHTML = '<div class="alert alert-danger">Error loading ledger: ' + err.message + '</div>';
+    function buildExportUrl(id) {
+        const base = window.location.pathname;
+        const params = new URLSearchParams();
+        params.set('id', id);
+        params.set('export', 'excel');
+        params.set('filter_from', fromInput.value);
+        params.set('filter_to', toInput.value);
+        return base + '?' + params.toString();
     }
-  }
 
-  select.addEventListener('change', () => loadLedger(select.value));
-  applyBtn.addEventListener('click', () => loadLedger(select.value));
+    async function loadLedger(id) {
+        if (!id) {
+            details.innerHTML = '<p class="text-muted">Select a ledger to view details...</p>';
+            exportBtn.setAttribute('href', '#');
+            exportBtn.classList.add('disabled');
+            return;
+        }
+        exportBtn.setAttribute('href', buildExportUrl(id));
+        exportBtn.classList.remove('disabled');
 
-  thisYearBtn.addEventListener('click', (ev) => {
-    ev.preventDefault();
-    const y = new Date().getFullYear();
-    fromInput.value = y + '-01-01';
-    toInput.value = new Date().toISOString().slice(0,10);
-    loadLedger(select.value);
-  });
-  thisMonthBtn.addEventListener('click', (ev) => {
-    ev.preventDefault();
-    const now = new Date();
-    fromInput.value = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-01';
-    toInput.value = new Date().toISOString().slice(0,10);
-    loadLedger(select.value);
-  });
-
-  window.addEventListener('load', () => {
-    const params = new URLSearchParams(window.location.search);
-    const id = params.get('id') || params.get('ledger_id');
-    const f = params.get('filter_from');
-    const t = params.get('filter_to');
-    if (f) fromInput.value = f;
-    if (t) toInput.value = t;
-    if (id) {
-      select.value = id;
-      loadLedger(id);
+        details.innerHTML = '<div class="text-center py-3"><div class="spinner-border text-info spinner-border-sm" role="status"></div> Loading...</div>';
+        try {
+            const resp = await fetch(buildAjaxUrl(id), { cache: 'no-store' });
+            if (!resp.ok) throw new Error('Server returned ' + resp.status);
+            const html = await resp.text();
+            details.innerHTML = html;
+            window.scrollTo({ top: details.offsetTop - 20, behavior: 'smooth' });
+        } catch (err) {
+            console.error(err);
+            details.innerHTML = '<div class="alert alert-danger">Error loading ledger: ' + err.message + '</div>';
+        }
     }
-  });
+
+    select.addEventListener('change', () => loadLedger(select.value));
+    applyBtn.addEventListener('click', () => loadLedger(select.value));
+
+    thisYearBtn.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        const y = new Date().getFullYear();
+        fromInput.value = y + '-01-01';
+        toInput.value = new Date().toISOString().slice(0,10);
+        loadLedger(select.value);
+    });
+    thisMonthBtn.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        const now = new Date();
+        fromInput.value = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-01';
+        toInput.value = new Date().toISOString().slice(0,10);
+        loadLedger(select.value);
+    });
+
+    window.addEventListener('load', () => {
+        const params = new URLSearchParams(window.location.search);
+        const id = params.get('id') || params.get('ledger_id');
+        const f = params.get('filter_from');
+        const t = params.get('filter_to');
+        if (f) fromInput.value = f;
+        if (t) toInput.value = t;
+        if (id) {
+            select.value = id;
+            loadLedger(id);
+        }
+    });
 })();
 </script>
 </body>
