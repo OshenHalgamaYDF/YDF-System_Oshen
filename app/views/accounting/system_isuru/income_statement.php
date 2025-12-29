@@ -4,17 +4,16 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\system_isur
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <title>Income Statement</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-  <style>
-    @media print { .no-print { display:none !important; } }
-  </style>
+    <meta charset="utf-8">
+    <title>Income Statement</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        @media print { .no-print { display:none !important; } }
+    </style>
 </head>
 <body class="p-4 bg-light">
 <div class="container mb-4">
     <div class="card shadow-lg">
-
         <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
             <h5 class="mb-0">📈 Income Statement</h5>
             <div class="d-flex gap-2">
@@ -33,26 +32,26 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\system_isur
         <!-- Date Range Filter (styled like Trial Balance) -->
         <div class="card-header bg-light no-print">
             <form method="GET" class="row g-2 align-items-end">
-              <div class="col-md-3">
-                <label for="filter_from" class="form-label fw-bold">From Date:</label>
-                <input type="date" id="filter_from" name="filter_from" class="form-control" value="<?= htmlspecialchars($filter_from) ?>" required>
-              </div>
-              <div class="col-md-3">
-                <label for="filter_to" class="form-label fw-bold">To Date:</label>
-                <input type="date" id="filter_to" name="filter_to" class="form-control" value="<?= htmlspecialchars($filter_to) ?>" required>
-              </div>
-              <div class="col-auto">
-                <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-funnel"></i> Apply Filter</button>
-              </div>
-              <div class="col-auto">
-                <a href="?filter_from=<?= date('Y-01-01') ?>&filter_to=<?= date('Y-m-d') ?>" class="btn btn-secondary btn-sm"><i class="bi bi-calendar-range"></i> This Year</a>
-              </div>
-              <div class="col-auto">
-                <a href="?filter_from=<?= date('Y-m-01') ?>&filter_to=<?= date('Y-m-d') ?>" class="btn btn-secondary btn-sm"><i class="bi bi-calendar"></i> This Month</a>
-              </div>
-              <div class="col-auto ms-auto">
-                <small class="text-muted">Showing: <strong><?= htmlspecialchars(date('M d, Y', strtotime($filter_from))) ?></strong> to <strong><?= htmlspecialchars(date('M d, Y', strtotime($filter_to))) ?></strong></small>
-              </div>
+                <div class="col-md-3">
+                    <label for="filter_from" class="form-label fw-bold">From Date:</label>
+                    <input type="date" id="filter_from" name="filter_from" class="form-control" value="<?= htmlspecialchars($filter_from) ?>" required>
+                </div>
+                <div class="col-md-3">
+                    <label for="filter_to" class="form-label fw-bold">To Date:</label>
+                    <input type="date" id="filter_to" name="filter_to" class="form-control" value="<?= htmlspecialchars($filter_to) ?>" required>
+                </div>
+                <div class="col-auto">
+                    <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-funnel"></i> Apply Filter</button>
+                </div>
+                <div class="col-auto">
+                    <a href="?filter_from=<?= date('Y-01-01') ?>&filter_to=<?= date('Y-m-d') ?>" class="btn btn-secondary btn-sm"><i class="bi bi-calendar-range"></i> This Year</a>
+                </div>
+                <div class="col-auto">
+                    <a href="?filter_from=<?= date('Y-m-01') ?>&filter_to=<?= date('Y-m-d') ?>" class="btn btn-secondary btn-sm"><i class="bi bi-calendar"></i> This Month</a>
+                </div>
+                <div class="col-auto ms-auto">
+                    <small class="text-muted">Showing: <strong><?= htmlspecialchars(date('M d, Y', strtotime($filter_from))) ?></strong> to <strong><?= htmlspecialchars(date('M d, Y', strtotime($filter_to))) ?></strong></small>
+                </div>
             </form>
         </div>
 
@@ -106,7 +105,6 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\system_isur
                 </tbody>
             </table>
         </div>
-
     </div>
 </div>
 </body>

@@ -12,10 +12,8 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\system_isur
 </style>
 </head>
 <body class="p-4 bg-light">
-
 <div class="container mb-4">
     <div class="card shadow-lg">
-
         <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
             <h5 class="mb-0">📘 Balance Sheet</h5>
             <div>
@@ -28,31 +26,30 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\system_isur
                 <a href="?<?= htmlspecialchars($export_qs) ?>" class="btn btn-success btn-sm">Download Excel</a>
                 <a href="accounting.php" class="btn btn-secondary btn-sm">← Back</a>
             </div>
-        </div>
-
+        </div>    
         <!-- Date Range Filter (Trial Balance style) -->
         <div class="card-header bg-light no-print">
             <form method="GET" class="row g-2 align-items-end">
-              <div class="col-md-3">
-                <label for="filter_from" class="form-label fw-bold">From Date:</label>
-                <input type="date" id="filter_from" name="filter_from" class="form-control" value="<?= htmlspecialchars($filter_from ?: date('Y-01-01')) ?>">
-              </div>
-              <div class="col-md-3">
-                <label for="filter_to" class="form-label fw-bold">To Date:</label>
-                <input type="date" id="filter_to" name="filter_to" class="form-control" value="<?= htmlspecialchars($filter_to ?: date('Y-m-d')) ?>">
-              </div>
-              <div class="col-auto">
-                <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-funnel"></i> Apply Filter</button>
-              </div>
-              <div class="col-auto">
-                <a href="?filter_from=<?= date('Y-01-01') ?>&filter_to=<?= date('Y-m-d') ?>" class="btn btn-secondary btn-sm"><i class="bi bi-calendar-range"></i> This Year</a>
-              </div>
-              <div class="col-auto">
-                <a href="?filter_from=<?= date('Y-m-01') ?>&filter_to=<?= date('Y-m-d') ?>" class="btn btn-secondary btn-sm"><i class="bi bi-calendar"></i> This Month</a>
-              </div>
-              <div class="col-auto ms-auto">
-                <small class="text-muted">Showing: <strong><?= htmlspecialchars($filter_from ? date('M d, Y', strtotime($filter_from)) : 'All') ?></strong> to <strong><?= htmlspecialchars($filter_to ? date('M d, Y', strtotime($filter_to)) : 'All') ?></strong></small>
-              </div>
+                <div class="col-md-3">
+                    <label for="filter_from" class="form-label fw-bold">From Date:</label>
+                    <input type="date" id="filter_from" name="filter_from" class="form-control" value="<?= htmlspecialchars($filter_from ?: date('Y-01-01')) ?>">
+                </div>
+                <div class="col-md-3">
+                    <label for="filter_to" class="form-label fw-bold">To Date:</label>
+                    <input type="date" id="filter_to" name="filter_to" class="form-control" value="<?= htmlspecialchars($filter_to ?: date('Y-m-d')) ?>">
+                </div>
+                <div class="col-auto">
+                    <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-funnel"></i> Apply Filter</button>
+                </div>
+                <div class="col-auto">
+                    <a href="?filter_from=<?= date('Y-01-01') ?>&filter_to=<?= date('Y-m-d') ?>" class="btn btn-secondary btn-sm"><i class="bi bi-calendar-range"></i> This Year</a>
+                </div>
+                <div class="col-auto">
+                    <a href="?filter_from=<?= date('Y-m-01') ?>&filter_to=<?= date('Y-m-d') ?>" class="btn btn-secondary btn-sm"><i class="bi bi-calendar"></i> This Month</a>
+                </div>
+                <div class="col-auto ms-auto">
+                    <small class="text-muted">Showing: <strong><?= htmlspecialchars($filter_from ? date('M d, Y', strtotime($filter_from)) : 'All') ?></strong> to <strong><?= htmlspecialchars($filter_to ? date('M d, Y', strtotime($filter_to)) : 'All') ?></strong></small>
+                </div>
             </form>
         </div>
 

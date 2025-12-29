@@ -4,21 +4,21 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\system_isur
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <title>Trial Balance</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
-  <style>
-    body { background-color: #f5f7fa; }
-    .container { max-width: 1200px; margin-top: 36px; }
-    @media print { .no-print { display:none !important; } }
-    .muted-small { font-size:0.85rem; color:#666; }
-  </style>
+    <meta charset="utf-8">
+    <title>Trial Balance</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body { background-color: #f5f7fa; }
+        .container { max-width: 1200px; margin-top: 36px; }
+        @media print { .no-print { display:none !important; } }
+        .muted-small { font-size:0.85rem; color:#666; }
+    </style>
 </head>
 <body class="p-4">
-  <div class="container mb-4">
-    <?php if ($suspense_message) echo $suspense_message; ?>
+    <div class="container mb-4">
+        <?php if ($suspense_message) echo $suspense_message; ?>
 
     <div class="card shadow-sm">
       <div class="card-header bg-warning d-flex justify-content-between align-items-center">

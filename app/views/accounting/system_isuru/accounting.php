@@ -40,7 +40,7 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\system_isur
     <!-- Quick action buttons (open modals or navigate to reports) -->
     <div class="btn-group-custom mb-4">
         <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addLedgerModal">➕ Add Ledger</button>
-        <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addVoucherModal">🧾 Add Voucher</button>
+        <button id="addVoucherBtn" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addVoucherModal" aria-label="Add Voucher (Ctrl+X)">🧾 Add Voucher </button>
         <a href="view_ledger.php" class="btn btn-info text-white">📘 View Ledger</a>
         <a href="bank_reconciliation.php" class="btn btn-secondary text-white">🏦 Bank Reconciliation</a>
         <a href="trial_balance.php" class="btn btn-warning text-dark">📊 Trial Balance</a>
@@ -504,12 +504,39 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-});
+    document.addEventListener('keydown', function (e) {
+        const active = document.activeElement;
+        const tag = active?.tagName;
 
-// Auto-hide flash alert after a few seconds so UI stays clean
-document.addEventListener('DOMContentLoaded', function() {
-    const a = document.getElementById('flashAlert');
-    if (a) setTimeout(() => { a.classList.remove('show'); a.remove(); }, 3000);
+        // Don't trigger while typing
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || active?.isContentEditable) {
+            return;
+        }
+
+        // ALT + SHIFT + V  (Firefox-safe)
+        if (e.altKey && e.shiftKey && !e.ctrlKey && !e.metaKey && e.code === 'KeyV') {
+            e.preventDefault();
+
+            const modalEl = document.getElementById('addVoucherModal');
+            if (!modalEl) return;
+
+            bootstrap.Modal.getOrCreateInstance(modalEl).show();
+
+            setTimeout(() => {
+                modalEl.querySelector('input, select, textarea')?.focus();
+            }, 200);
+        }
+
+        // ALT + SHIFT + T  (Firefox-safe)
+        if (e.altKey && e.shiftKey && !e.ctrlKey && !e.metaKey && e.code === 'KeyT') {
+            e.preventDefault();
+            window.location.href = 'trial_balance.php';
+
+            setTimeout(() => {
+                modalEl.querySelector('input, select, textarea')?.focus();
+            }, 200);
+        }
+    });
 });
 </script>
 
