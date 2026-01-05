@@ -115,7 +115,4 @@ if (isset($_GET['export']) && $_GET['export'] === 'excel') {
     fclose($out);
     exit;
 }
-
-// --- Save net income for SOFP ---
-file_put_contents(__DIR__ . '/last_net_income.txt', $net_income);
 ?>
