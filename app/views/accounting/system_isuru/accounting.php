@@ -28,7 +28,11 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\system_isur
         table th, table td { text-align: center; vertical-align: middle; }
         .btn-group-custom { display: flex; gap: 15px; flex-wrap: wrap; }
         .btn-group-custom .btn { flex: 1; min-width: 200px; }
-        .alert { margin-bottom: 20px; }
+        /* Alerts: space for left close button and smooth fade-out */
+        .alert { margin-bottom: 20px; position: relative; padding-left: 48px; transition: opacity .4s ease, max-height .4s ease, padding .3s ease; }
+        /* Left-positioned close button for alerts (keeps it on the left side) */
+        .alert .alert-close-left { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); border: none; background: transparent; color: inherit; font-size: 1.05rem; padding: 2px 6px; cursor: pointer; }
+        .alert.fade-out { opacity: 0; max-height: 0; padding-top: 0; padding-bottom: 0; margin-bottom: 0; overflow: hidden; }
     </style>
 </head>
 <body>
@@ -50,16 +54,26 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\system_isur
 
     <!-- Flash messages: simple feedback after actions (delete/update/save) -->
     <?php if (isset($_GET['deleted'])): ?>
-        <div class="alert alert-success" id="flashAlert">✅ Voucher deleted successfully.</div>
+        <div class="alert alert-success custom-alert" role="alert">
+            <button type="button" class="alert-close-left" aria-label="Close"><i class="fas fa-times"></i></button>
+            ✅ Voucher deleted successfully.
+        </div>
     <?php endif; ?>
     <?php if (isset($_GET['updated'])): ?>
-        <div class="alert alert-success" id="flashAlert">✅ Voucher updated successfully.</div>
+        <div class="alert alert-success custom-alert" role="alert">
+            <button type="button" class="alert-close-left" aria-label="Close"><i class="fas fa-times"></i></button>
+            ✅ Voucher updated successfully.
+        </div>
     <?php endif; ?>
     <?php if (isset($_GET['success'])): ?>
-        <div class="alert alert-success" id="flashAlert">✅ Saved successfully.</div>
+        <div class="alert alert-success custom-alert" role="alert">
+            <button type="button" class="alert-close-left" aria-label="Close"><i class="fas fa-times"></i></button>
+            ✅ Saved successfully.
+        </div>
     <?php endif; ?>
     <?php if (isset($_GET['error'])): ?>
-        <div class="alert alert-danger">
+        <div class="alert alert-danger custom-alert" role="alert">
+            <button type="button" class="alert-close-left" aria-label="Close"><i class="fas fa-times"></i></button>
             ❌ Error:
             <?php
             // Map known error codes to friendly messages
@@ -336,7 +350,36 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\system_isur
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     let currentEditModal = null;
+    // Auto-dismiss and left-close behavior for flash alerts (5s)
+    (function() {
+        const AUTO_DISMISS_MS = 5000;
+        function closeAlert(alert) {
+            if (!alert || alert.classList.contains('fading')) return;
+            alert.classList.add('fading', 'fade-out');
+            setTimeout(() => alert.remove(), 450);
+        }
 
+        document.querySelectorAll('.alert').forEach(alert => {
+            // attach click handler for left close
+            const btn = alert.querySelector('.alert-close-left');
+            if (btn) {
+                btn.addEventListener('click', () => closeAlert(alert));
+            } else {
+                const b = document.createElement('button');
+                b.type = 'button';
+                b.className = 'alert-close-left';
+                b.setAttribute('aria-label', 'Close');
+                b.innerHTML = '<i class="fas fa-times"></i>';
+                b.addEventListener('click', () => closeAlert(alert));
+                alert.prepend(b);
+            }
+
+            // schedule auto-dismiss unless marked sticky via data-sticky="1"
+            if (!alert.dataset.sticky) {
+                setTimeout(() => closeAlert(alert), AUTO_DISMISS_MS);
+            }
+        });
+    })();
     // Initialize DataTables if available
     // vouchersTable: sort by Date (column index 2) descending so newest vouchers appear on top
     if (typeof jQuery !== 'undefined' && $.fn.dataTable) {
