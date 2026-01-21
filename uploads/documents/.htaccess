@@ -1,0 +1,12 @@
+# Prevent directory listing and disallow direct access to most files
+
+Options -Indexes
+Order allow,deny
+Deny from all
+
+# Allow access to specific file types if you need (images, pdfs, etc.)
+
+<FilesMatch "\.(jpg|jpeg|png|gif|pdf|doc|docx|txt|csv)$">
+Order deny,allow
+Allow from all
+</FilesMatch>

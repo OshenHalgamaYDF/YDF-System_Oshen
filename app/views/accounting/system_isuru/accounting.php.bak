@@ -223,7 +223,7 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\system_isur
         <div class="tab-pane fade show active" id="tab-voucher" role="tabpanel">
           <form method="POST" id="addVoucherForm">
            <div class="row mb-2">
-              <div class="col-md-3">
+              <div class="col-md-4">
                  <label>Voucher Type</label>
                  <select name="voucher_type" class="form-select" required>
                     <option value="Payment">Payment</option>
@@ -232,32 +232,13 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\system_isur
                     <option value="Contra">Contra</option>
                  </select>
               </div>
-              <div class="col-md-3">
+              <div class="col-md-4">
                  <label>Date</label>
                  <input type="date" name="date" class="form-control" required value="<?= date('Y-m-d'); ?>">
               </div>
-              <div class="col-md-3">
+              <div class="col-md-4">
                  <label>Amount</label>
-                 <input type="text" name="amount" id="amountInput" class="form-control" required placeholder="e.g., $100 or 100">
-              </div>
-              <div class="col-md-3">
-                 <label>Currency</label>
-                 <select name="currency_id" id="currencySelect" class="form-select">
-                    <option value="1">LKR (Sri Lankan Rupee)</option>
-                    <option value="2">USD (US Dollar)</option>
-                    <option value="3">EUR (Euro)</option>
-                    <!-- Add more currencies as needed -->
-                 </select>
-              </div>
-           </div>
-           <div class="row mb-2">
-              <div class="col-md-6">
-                 <label>Exchange Rate (to LKR)</label>
-                 <input type="number" name="exchange_rate" id="exchangeRateInput" class="form-control" step="0.000001" value="1.000000" readonly>
-              </div>
-              <div class="col-md-6">
-                 <label>LKR Equivalent</label>
-                 <div id="lkrPreview" class="form-control-plaintext">≈ 0.00 LKR</div>
+                 <input type="number" name="amount" class="form-control" step="0.01" required>
               </div>
            </div>
            <div class="row mb-2">
@@ -273,22 +254,22 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\system_isur
                         }
                     }
                     ?>
-                </select>
-                </div>
-                <div class="col-md-6">
-                   <label>Credit Ledger (Cr)</label>
-                   <select name="cr_ledger" id="crLedgerSelect" class="form-select" required>
-                      <option value="">-- Select --</option>
-                      <?php
-                      $ledgersCr = $conn->query("SELECT ledger_id, ledger_name FROM ledgers ORDER BY ledger_name ASC");
-                      if ($ledgersCr && $ledgersCr->num_rows > 0) {
-                          while ($l = $ledgersCr->fetch_assoc()) {
-                             echo "<option value='" . intval($l['ledger_id']) . "'>" . htmlspecialchars($l['ledger_name']) . "</option>";
-                          }
-                      }
-                      ?>
-                   </select>
-                </div>
+                 </select>
+              </div>
+              <div class="col-md-6">
+                 <label>Credit Ledger (Cr)</label>
+                 <select name="cr_ledger" id="crLedgerSelect" class="form-select" required>
+                    <option value="">-- Select --</option>
+                    <?php
+                    $ledgersCr = $conn->query("SELECT ledger_id, ledger_name FROM ledgers ORDER BY ledger_name ASC");
+                    if ($ledgersCr && $ledgersCr->num_rows > 0) {
+                        while ($l = $ledgersCr->fetch_assoc()) {
+                           echo "<option value='" . intval($l['ledger_id']) . "'>" . htmlspecialchars($l['ledger_name']) . "</option>";
+                        }
+                    }
+                    ?>
+                 </select>
+              </div>
            </div>
            <div class="mb-3">
               <label>Narration</label>
@@ -439,64 +420,6 @@ function refreshLedgerDropdowns(selectedId = null) {
            throw error;
        });
 }
-
-// Preload currencies/rates or fetch dynamically:
-async function fetchRate(currencyCode, date) {
-  // Example: server endpoint ?action=get_rate&code=USD&date=2026-01-14
-  const res = await fetch(window.location.pathname + `?action=get_rate&code=${encodeURIComponent(currencyCode)}&date=${encodeURIComponent(date)}`);
-  const json = await res.json();
-  return json.rate || null;
-}
-
-// Function to fetch exchange rate
-async function fetchRate(currencyCode, date) {
-  try {
-    const res = await fetch(window.location.pathname + `?action=get_rate&code=${encodeURIComponent(currencyCode)}&date=${encodeURIComponent(date)}`);
-    const json = await res.json();
-    return json.rate || null;
-  } catch (e) {
-    console.error('Error fetching rate:', e);
-    return null;
-  }
-}
-
-const amountInput = document.getElementById('amountInput');
-const currencySelect = document.getElementById('currencySelect');
-const exchangeRateInput = document.getElementById('exchangeRateInput');
-const lkrPreview = document.getElementById('lkrPreview');
-const dateInput = document.querySelector('input[name="date"]');
-
-async function updateConversion() {
-  let raw = amountInput.value.trim();
-  // Detect $ (USD) or other symbols (extend as needed)
-  if (/^\s*\$/.test(raw)) {
-    currencySelect.value = '2'; // Assuming USD is value 2
-    raw = raw.replace(/^\s*\$\s*/, '');
-    amountInput.value = raw;
-  }
-  const amount = parseFloat(raw) || 0;
-  const currencyId = currencySelect.value;
-  const currencyCode = currencySelect.options[currencySelect.selectedIndex].text.split(' ')[0]; // e.g., 'USD'
-  if (currencyId === '1' || currencyCode === 'LKR') { // Assuming LKR is 1
-    lkrPreview.textContent = `≈ ${amount.toFixed(2)} LKR`;
-    exchangeRateInput.value = 1;
-    return;
-  }
-  // get rate for selected currency and date
-  const rate = await fetchRate(currencyCode, dateInput.value || new Date().toISOString().slice(0,10));
-  if (rate) {
-    exchangeRateInput.value = parseFloat(rate).toFixed(6);
-    const amountLkr = (amount * parseFloat(rate));
-    lkrPreview.textContent = `≈ ${amountLkr.toFixed(2)} LKR`;
-  } else {
-    lkrPreview.textContent = 'Rate not found';
-  }
-}
-
-// Bind events
-amountInput.addEventListener('input', () => { updateConversion().catch(console.error); });
-currencySelect.addEventListener('change', () => { updateConversion().catch(console.error); });
-dateInput.addEventListener('change', () => { updateConversion().catch(console.error); });
 </script>
 
 <!-- ==========================

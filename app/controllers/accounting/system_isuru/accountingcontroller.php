@@ -42,7 +42,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_voucher' && isset($_GET['
 
     // ------------------ Fetch Voucher Header ------------------
     $vstmt = $conn->prepare("
-        SELECT voucher_id, voucher_type, date, narration
+        SELECT voucher_id, voucher_type, date, narration, amount, currency_id, exchange_rate
         FROM vouchers
         WHERE voucher_id = ?
     ");
@@ -100,17 +100,29 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_voucher' && isset($_GET['
         <!-- Amount -->
         <div class="col-md-4">
             <label>Amount</label>
-            <?php
-            // Pick amount from Dr entry or fallback to first entry
-            $amt = 0;
-            foreach ($entries as $e) {
-                if ($e['type'] === 'Dr') { $amt = $e['amount']; break; }
-            }
-            if ($amt == 0 && isset($entries[0])) $amt = $entries[0]['amount'];
-            ?>
-            <input type="number" name="amount" class="form-control"
-                   step="0.01" required
-                   value="<?= number_format((float)$amt, 2, '.', '') ?>">
+            <input type="text" name="amount" id="editAmountInput" class="form-control"
+                   required placeholder="e.g., $100 or 100"
+                   value="<?= number_format((float)($voucher['amount'] ?? 0), 2, '.', '') ?>">
+        </div>
+    </div>
+
+    <!-- Currency and Exchange Rate -->
+    <div class="row mb-2">
+        <div class="col-md-6">
+            <label>Currency</label>
+            <select name="currency_id" id="editCurrencySelect" class="form-select">
+                <?php
+                $currencies = $conn->query("SELECT currency_id, code, name FROM currencies ORDER BY code");
+                while ($c = $currencies->fetch_assoc()) {
+                    $sel = ($c['currency_id'] == ($voucher['currency_id'] ?? 1)) ? 'selected' : '';
+                    echo "<option value='{$c['currency_id']}' $sel>{$c['code']} ({$c['name']})</option>";
+                }
+                ?>
+            </select>
+        </div>
+        <div class="col-md-6">
+            <label>Exchange Rate (to LKR)</label>
+            <input type="number" name="exchange_rate" id="editExchangeRateInput" class="form-control" step="0.000001" value="<?= number_format((float)($voucher['exchange_rate'] ?? 1.0), 6, '.', '') ?>" readonly>
         </div>
     </div>
 
@@ -172,6 +184,44 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_voucher' && isset($_GET['
 
 
 // ============================================================================
+// AJAX: GET LEDGERS
+// Clients can call ?action=get_ledgers to receive JSON list of ledgers
+// ============================================================================
+if (isset($_GET['action']) && $_GET['action'] === 'get_ledgers') {
+    $ledgers = [];
+    $res = $conn->query("SELECT ledger_id, ledger_name FROM ledgers ORDER BY ledger_name ASC");
+    if ($res) {
+        while ($r = $res->fetch_assoc()) {
+            $ledgers[] = $r;
+        }
+    }
+    header('Content-Type: application/json');
+    echo json_encode(['ledgers' => $ledgers]);
+    exit;
+}
+
+// ============================================================================
+// AJAX: GET EXCHANGE RATE
+// Clients can call ?action=get_rate&code=USD&date=2026-01-16 to get rate
+// ============================================================================
+if (isset($_GET['action']) && $_GET['action'] === 'get_rate' && isset($_GET['code'])) {
+    $code = $_GET['code'];
+    $date = $_GET['date'] ?? date('Y-m-d');
+    $rate = null;
+    $stmt = $conn->prepare("SELECT er.rate_to_lkr FROM exchange_rates er JOIN currencies c ON er.currency_id = c.currency_id WHERE c.code = ? AND er.rate_date <= ? ORDER BY er.rate_date DESC LIMIT 1");
+    $stmt->bind_param("ss", $code, $date);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    if ($r = $result->fetch_assoc()) {
+        $rate = $r['rate_to_lkr'];
+    }
+    header('Content-Type: application/json');
+    echo json_encode(['rate' => $rate]);
+    exit;
+}
+
+
+// ============================================================================
 // 3) ADD LEDGER
 // ============================================================================
 if (isset($_POST['add_ledger'])) {
@@ -182,6 +232,11 @@ if (isset($_POST['add_ledger'])) {
     $group_id         = isset($_POST['group_id']) ? (int)$_POST['group_id'] : null;
 
     if (empty($group_id)) {
+        if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Please select an Account Group.']);
+            exit;
+        }
         echo "<script>alert('⚠️ Please select an Account Group.');</script>";
     } else {
         $stmt = $conn->prepare("
@@ -190,6 +245,12 @@ if (isset($_POST['add_ledger'])) {
         ");
         $stmt->bind_param("sdsi", $ledger_name, $opening_balance, $balance_type, $group_id);
         $stmt->execute();
+        $newId = $conn->insert_id;
+        if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => true, 'ledger' => ['ledger_id' => $newId, 'ledger_name' => $ledger_name]]);
+            exit;
+        }
         header("Location: ?success=1");
         exit;
     }
@@ -207,6 +268,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_voucher'])) {
     $dr_ledger    = intval($_POST['dr_ledger'] ?? 0);
     $cr_ledger    = intval($_POST['cr_ledger'] ?? 0);
     $amount       = floatval($_POST['amount'] ?? 0);
+    $currency_id  = intval($_POST['currency_id'] ?? 1); // Default to LKR
+    $exchange_rate = floatval($_POST['exchange_rate'] ?? 1.0);
 
     // Basic validation
     if ($dr_ledger <= 0 || $cr_ledger <= 0 || $amount <= 0) {
@@ -214,29 +277,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_voucher'])) {
         exit;
     }
 
+    // Compute LKR equivalent
+    $amount_lkr = round($amount * $exchange_rate, 2);
+
     // Insert voucher header
     $stmt = $conn->prepare("
-        INSERT INTO vouchers (voucher_type, date, narration, created_at)
-        VALUES (?, ?, ?, NOW())
+        INSERT INTO vouchers (voucher_type, date, narration, currency_id, exchange_rate, created_at)
+        VALUES (?, ?, ?, ?, ?, NOW())
     ");
-    $stmt->bind_param("sss", $voucher_type, $date, $narration);
+    $stmt->bind_param("sssid", $voucher_type, $date, $narration, $currency_id, $exchange_rate);
     $stmt->execute();
+    /**
+     * Retrieves the ID of the last inserted row from the database connection
+     * and assigns it to the $voucher_id variable.
+     * 
+     * This is typically used after an INSERT operation to get the auto-generated
+     * primary key of the newly created voucher record.
+     * 
+     * @var int $voucher_id The auto-incremented ID of the inserted voucher
+     */
     $voucher_id = $conn->insert_id;
 
     // Insert Debit entry
     $stmt2 = $conn->prepare("
-        INSERT INTO voucher_entries (voucher_id, ledger_id, type, amount)
-        VALUES (?, ?, 'Dr', ?)
+        INSERT INTO voucher_entries (voucher_id, ledger_id, type, amount, amount_lkr)
+        VALUES (?, ?, 'Dr', ?, ?)
     ");
-    $stmt2->bind_param("iid", $voucher_id, $dr_ledger, $amount);
+    $stmt2->bind_param("iidd", $voucher_id, $dr_ledger, $amount, $amount_lkr);
     $stmt2->execute();
 
     // Insert Credit entry
     $stmt3 = $conn->prepare("
-        INSERT INTO voucher_entries (voucher_id, ledger_id, type, amount)
-        VALUES (?, ?, 'Cr', ?)
+        INSERT INTO voucher_entries (voucher_id, ledger_id, type, amount, amount_lkr)
+        VALUES (?, ?, 'Cr', ?, ?)
     ");
-    $stmt3->bind_param("iid", $voucher_id, $cr_ledger, $amount);
+    $stmt3->bind_param("iidd", $voucher_id, $cr_ledger, $amount, $amount_lkr);
     $stmt3->execute();
 
     header("Location: ?success=1");
@@ -257,6 +332,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_voucher'])) {
     $dr_ledger    = intval($_POST['dr_ledger'] ?? 0);
     $cr_ledger    = intval($_POST['cr_ledger'] ?? 0);
     $amount       = floatval($_POST['amount'] ?? 0);
+    $currency_id  = intval($_POST['currency_id'] ?? 1);
+    $exchange_rate = floatval($_POST['exchange_rate'] ?? 1.0);
     $entry_map    = $_POST['entry_id_map'] ?? [];
 
     // Basic validation
@@ -264,6 +341,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_voucher'])) {
         header("Location: ?error=bad_id");
         exit;
     }
+
+    // Compute LKR equivalent
+    $amount_lkr = round($amount * $exchange_rate, 2);
 
     if ($dr_ledger === $cr_ledger) {
         header("Location: ?error=same_ledgers");
@@ -277,10 +357,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_voucher'])) {
         //------------------ Update Voucher Header ------------------
         $ustmt = $conn->prepare("
             UPDATE vouchers
-            SET voucher_type = ?, date = ?, narration = ?
+            SET voucher_type = ?, date = ?, narration = ?, currency_id = ?, exchange_rate = ?
             WHERE voucher_id = ?
         ");
-        $ustmt->bind_param("sssi", $voucher_type, $date, $narration, $id);
+        $ustmt->bind_param("sssidi", $voucher_type, $date, $narration, $currency_id, $exchange_rate, $id);
         $ustmt->execute();
         $ustmt->close();
 
@@ -291,20 +371,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_voucher'])) {
             $eid = intval($entry_map['Dr']);
             $estmt = $conn->prepare("
                 UPDATE voucher_entries
-                SET ledger_id = ?, amount = ?
+                SET ledger_id = ?, amount = ?, amount_lkr = ?
                 WHERE entry_id = ?
             ");
-            $estmt->bind_param("idi", $dr_ledger, $amount, $eid);
+            $estmt->bind_param("iddi", $dr_ledger, $amount, $amount_lkr, $eid);
             $estmt->execute();
             $estmt->close();
 
         } else {
             // Insert if missing
             $ist = $conn->prepare("
-                INSERT INTO voucher_entries (voucher_id, ledger_id, type, amount)
-                VALUES (?, ?, 'Dr', ?)
+                INSERT INTO voucher_entries (voucher_id, ledger_id, type, amount, amount_lkr)
+                VALUES (?, ?, 'Dr', ?, ?)
             ");
-            $ist->bind_param("iid", $id, $dr_ledger, $amount);
+            $ist->bind_param("iidd", $id, $dr_ledger, $amount, $amount_lkr);
             $ist->execute();
             $ist->close();
         }
@@ -316,20 +396,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_voucher'])) {
             $eid = intval($entry_map['Cr']);
             $estmt = $conn->prepare("
                 UPDATE voucher_entries
-                SET ledger_id = ?, amount = ?
+                SET ledger_id = ?, amount = ?, amount_lkr = ?
                 WHERE entry_id = ?
             ");
-            $estmt->bind_param("idi", $cr_ledger, $amount, $eid);
+            $estmt->bind_param("iddi", $cr_ledger, $amount, $amount_lkr, $eid);
             $estmt->execute();
             $estmt->close();
 
         } else {
             // Insert if missing
             $ist = $conn->prepare("
-                INSERT INTO voucher_entries (voucher_id, ledger_id, type, amount)
-                VALUES (?, ?, 'Cr', ?)
+                INSERT INTO voucher_entries (voucher_id, ledger_id, type, amount, amount_lkr)
+                VALUES (?, ?, 'Cr', ?, ?)
             ");
-            $ist->bind_param("iid", $id, $cr_ledger, $amount);
+            $ist->bind_param("iidd", $id, $cr_ledger, $amount, $amount_lkr);
             $ist->execute();
             $ist->close();
         }
@@ -452,7 +532,7 @@ $ledgers = $conn->query("
 // Fetch vouchers with entries combined
 $vouchers = $conn->query("
     SELECT v.voucher_id, v.voucher_type, v.date, v.narration,
-           GROUP_CONCAT(CONCAT(l.ledger_name, ' ', ve.type, ' ', ve.amount)
+           GROUP_CONCAT(CONCAT(l.ledger_name, ' ', ve.type, ' ', ve.amount_lkr)
            SEPARATOR '<br>') AS entries
     FROM vouchers v
     JOIN voucher_entries ve ON v.voucher_id = ve.voucher_id
@@ -469,15 +549,15 @@ $balances = $conn->query("
         l.opening_balance,
         l.balance_type,
 
-        COALESCE(SUM(CASE WHEN ve.type='Dr' THEN ve.amount ELSE 0 END), 0) AS total_dr,
-        COALESCE(SUM(CASE WHEN ve.type='Cr' THEN ve.amount ELSE 0 END), 0) AS total_cr,
+        COALESCE(SUM(CASE WHEN ve.type='Dr' THEN ve.amount_lkr ELSE 0 END), 0) AS total_dr,
+        COALESCE(SUM(CASE WHEN ve.type='Cr' THEN ve.amount_lkr ELSE 0 END), 0) AS total_cr,
 
         (
           (CASE WHEN UPPER(l.balance_type)='DR'
                 THEN l.opening_balance
                 ELSE -l.opening_balance END)
-          + COALESCE(SUM(CASE WHEN ve.type='Dr' THEN ve.amount ELSE 0 END), 0)
-          - COALESCE(SUM(CASE WHEN ve.type='Cr' THEN ve.amount ELSE 0 END), 0)
+          + COALESCE(SUM(CASE WHEN ve.type='Dr' THEN ve.amount_lkr ELSE 0 END), 0)
+          - COALESCE(SUM(CASE WHEN ve.type='Cr' THEN ve.amount_lkr ELSE 0 END), 0)
         ) AS net_balance
 
     FROM ledgers l
@@ -485,4 +565,19 @@ $balances = $conn->query("
     GROUP BY l.ledger_id
 ");
 
-?>
+// ============================================================================
+// 9) GET EXCHANGE RATE (AJAX)
+// ============================================================================
+if (isset($_GET['action']) && $_GET['action'] === 'get_rate' && isset($_GET['code'])) {
+    $code = $_GET['code'];
+    $date = $_GET['date'] ?? date('Y-m-d');
+    // Find currency_id by code and pick most recent rate <= $date
+    // Return json: { rate: 35.48 }
+    header('Content-Type: application/json');
+    $stmt = $conn->prepare("SELECT rate_to_lkr FROM exchange_rates er JOIN currencies c ON er.currency_id=c.currency_id WHERE c.code=? AND er.rate_date<=? ORDER BY er.rate_date DESC LIMIT 1");
+    $stmt->bind_param("ss", $code, $date);
+    $stmt->execute();
+    $r = $stmt->get_result()->fetch_assoc();
+    echo json_encode(['rate' => $r['rate_to_lkr'] ?? null]);
+    exit;
+}
