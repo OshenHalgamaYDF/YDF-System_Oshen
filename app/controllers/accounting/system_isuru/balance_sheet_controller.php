@@ -3,6 +3,8 @@
 // BALANCE SHEET (Date Range Filter + Suspense Dynamic Fix + Excel Export)
 // Updated to use filter_from / filter_to (appearance like Trial Balance)
 // =============================
+session_start(); // Start session for country selection
+
 $servername = "localhost";
 $username = "root";
 $password = "";
@@ -11,6 +13,23 @@ $database = "ydf-system";
 $conn = new mysqli($servername, $username, $password, $database);
 if ($conn->connect_error) die("Connection failed: " . $conn->connect_error);
 $conn->set_charset('utf8mb4');
+
+// ============================================================================
+// COUNTRY SELECTION HANDLING
+// ============================================================================
+if (!isset($_SESSION['country_id'])) {
+    $default_country = $conn->query("SELECT id FROM countries ORDER BY id ASC LIMIT 1")->fetch_assoc();
+    $_SESSION['country_id'] = $default_country ? $default_country['id'] : 1;
+}
+
+$active_country_id = $_SESSION['country_id'];
+
+// Fetch active country details
+$country_stmt = $conn->prepare("SELECT country_name, currency_code FROM countries WHERE id = ?");
+$country_stmt->bind_param("i", $active_country_id);
+$country_stmt->execute();
+$active_country = $country_stmt->get_result()->fetch_assoc();
+$country_stmt->close();
 
 // --- Helper: validate date ---
 function valid_date($d) {
@@ -36,7 +55,7 @@ if ($filter_from && $filter_to) {
 }
 
 // --- Calculate Net Income dynamically based on date filter ---
-$income_query = $conn->query("
+$income_stmt = $conn->prepare("
     SELECT
       COALESCE(SUM(CASE WHEN g.group_type='Income' THEN ve.amount * 
             (CASE WHEN ve.type='Cr' THEN 1 WHEN ve.type='Dr' THEN -1 END) ELSE 0 END),0) AS income_total,
@@ -46,9 +65,12 @@ $income_query = $conn->query("
     JOIN vouchers v ON ve.voucher_id = v.voucher_id
     JOIN ledgers l ON ve.ledger_id = l.ledger_id
     JOIN account_groups g ON l.group_id = g.group_id
-    WHERE g.group_type IN ('Income','Expense') AND $dateExpr
+    WHERE g.group_type IN ('Income','Expense') AND l.country_id = ? AND v.country_id = ? AND $dateExpr
 ");
-$income_data = $income_query->fetch_assoc();
+$income_stmt->bind_param("ii", $active_country_id, $active_country_id);
+$income_stmt->execute();
+$income_data = $income_stmt->get_result()->fetch_assoc();
+$income_stmt->close();
 $net_income = ($income_data['income_total'] ?? 0) - ($income_data['expense_total'] ?? 0);
 
 // --- Fetch all ledgers with balances (respect dateExpr) ---
@@ -67,10 +89,15 @@ $query = "
     LEFT JOIN voucher_entries ve ON ve.ledger_id = l.ledger_id
     LEFT JOIN vouchers v ON ve.voucher_id = v.voucher_id
     WHERE COALESCE(ag.group_type,'') IN ('Asset','Liability','Equity','Suspense')
+      AND l.country_id = ?
+      AND (v.country_id = ? OR v.country_id IS NULL)
     GROUP BY l.ledger_id
     ORDER BY ag.group_type, ag.group_name, l.ledger_name
 ";
-$result = $conn->query($query);
+$stmt = $conn->prepare($query);
+$stmt->bind_param("ii", $active_country_id, $active_country_id);
+$stmt->execute();
+$result = $stmt->get_result();
 
 $accounts = [];
 if ($result && $result->num_rows > 0) {

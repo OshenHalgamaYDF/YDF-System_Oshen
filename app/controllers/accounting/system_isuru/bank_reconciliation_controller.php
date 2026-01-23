@@ -3,6 +3,8 @@
 // BANK RECONCILIATION (combined view + AJAX endpoint + ledger export)
 // Added date range filter (filter_from, filter_to) to AJAX ledger view and export
 // ========================================
+session_start(); // Start session for country selection
+
 $servername = "localhost";
 $username = "root";
 $password = "";
@@ -14,6 +16,23 @@ if ($conn->connect_error) {
     die("Connection failed: " . $conn->connect_error);
 }
 $conn->set_charset('utf8mb4');
+
+// ============================================================================
+// COUNTRY SELECTION HANDLING
+// ============================================================================
+if (!isset($_SESSION['country_id'])) {
+    $default_country = $conn->query("SELECT id FROM countries ORDER BY id ASC LIMIT 1")->fetch_assoc();
+    $_SESSION['country_id'] = $default_country ? $default_country['id'] : 1;
+}
+
+$active_country_id = $_SESSION['country_id'];
+
+// Fetch active country details
+$country_stmt = $conn->prepare("SELECT country_name, currency_code FROM countries WHERE id = ?");
+$country_stmt->bind_param("i", $active_country_id);
+$country_stmt->execute();
+$active_country = $country_stmt->get_result()->fetch_assoc();
+$country_stmt->close();
 
 // --- Date range filter (from/to) ---
 $filter_from = isset($_GET['filter_from']) && $_GET['filter_from'] ? $_GET['filter_from'] : date('Y-01-01');

@@ -1,6 +1,6 @@
 <?php
 // ============================================================================
-// accounting.php (single-file) – FULLY COMMENTED VERSION
+// accounting.php (single-file) – FULLY COMMENTED VERSION WITH MULTI-COUNTRY SUPPORT
 // ============================================================================
 // This file handles:
 //  • Adding ledgers
@@ -12,6 +12,7 @@
 //  • Fetching data for display
 // ============================================================================
 
+session_start(); // Start session for country selection
 
 // ============================================================================
 // 1) DATABASE CONNECTION
@@ -31,6 +32,29 @@ if ($conn->connect_error) {
 
 $conn->set_charset('utf8mb4'); // Always use UTF-8 for safety
 
+// ============================================================================
+// COUNTRY SELECTION HANDLING
+// ============================================================================
+if (isset($_POST['select_country'])) {
+    $_SESSION['country_id'] = intval($_POST['country_id']);
+    header("Location: " . $_SERVER['PHP_SELF']);
+    exit;
+}
+
+// Default to first country if not set
+if (!isset($_SESSION['country_id'])) {
+    $default_country = $conn->query("SELECT id FROM countries ORDER BY id ASC LIMIT 1")->fetch_assoc();
+    $_SESSION['country_id'] = $default_country ? $default_country['id'] : 1;
+}
+
+$active_country_id = $_SESSION['country_id'];
+
+// Fetch active country details
+$country_stmt = $conn->prepare("SELECT country_name, currency_code FROM countries WHERE id = ?");
+$country_stmt->bind_param("i", $active_country_id);
+$country_stmt->execute();
+$active_country = $country_stmt->get_result()->fetch_assoc();
+$country_stmt->close();
 
 // ============================================================================
 // 2) AJAX ENDPOINT — LOAD VOUCHER FORM FOR EDITING
@@ -44,12 +68,17 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_voucher' && isset($_GET['
     $vstmt = $conn->prepare("
         SELECT voucher_id, voucher_type, date, narration, amount, currency_id, exchange_rate
         FROM vouchers
-        WHERE voucher_id = ?
+        WHERE voucher_id = ? AND country_id = ?
     ");
-    $vstmt->bind_param("i", $id);
+    $vstmt->bind_param("ii", $id, $active_country_id);
     $vstmt->execute();
     $voucher = $vstmt->get_result()->fetch_assoc();
     $vstmt->close();
+
+    if (!$voucher) {
+        echo "<div class='alert alert-danger'>Voucher not found or access denied.</div>";
+        exit;
+    }
 
     // ------------------ Fetch Dr/Cr Entries -------------------
     // Expect exactly 2 entries (1 Dr, 1 Cr)
@@ -64,13 +93,20 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_voucher' && isset($_GET['
     $entries = $estmt->get_result()->fetch_all(MYSQLI_ASSOC);
     $estmt->close();
 
-    // ------------------ Fetch Ledgers For Dropdowns ------------
-    // Done separately to avoid pointer issues during looping
-    $ledgers_dr = $conn->query("SELECT ledger_id, ledger_name FROM ledgers ORDER BY ledger_name ASC");
-    $ledgers_cr = $conn->query("SELECT ledger_id, ledger_name FROM ledgers ORDER BY ledger_name ASC");
+    // ------------------ Fetch Ledgers For Dropdowns (Filtered by Country) ------------
+    $ledgers_stmt = $conn->prepare("SELECT ledger_id, ledger_name FROM ledgers WHERE country_id = ? ORDER BY ledger_name ASC");
+    $ledgers_stmt->bind_param("i", $active_country_id);
+    $ledgers_stmt->execute();
+    $ledgers_result = $ledgers_stmt->get_result();
+    $ledgers_dr = [];
+    $ledgers_cr = [];
+    while ($l = $ledgers_result->fetch_assoc()) {
+        $ledgers_dr[] = $l;
+        $ledgers_cr[] = $l;
+    }
+    $ledgers_stmt->close();
 
     // ------------------ Return HTML (AJAX fragment) -------------
-    // No closing PHP tag until bottom so HTML can mix easily
     ?>
     
     <!-- Voucher Type, Date, Amount -->
@@ -99,7 +135,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_voucher' && isset($_GET['
 
         <!-- Amount -->
         <div class="col-md-4">
-            <label>Amount</label>
+            <label>Amount (<?= htmlspecialchars($active_country['currency_code']) ?>)</label>
             <input type="text" name="amount" id="editAmountInput" class="form-control"
                    required placeholder="e.g., $100 or 100"
                    value="<?= number_format((float)($voucher['amount'] ?? 0), 2, '.', '') ?>">
@@ -137,7 +173,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_voucher' && isset($_GET['
                 $dr_id = null;
                 foreach ($entries as $e) if ($e['type'] === 'Dr') $dr_id = $e['ledger_id'];
 
-                while ($l = $ledgers_dr->fetch_assoc()) {
+                foreach ($ledgers_dr as $l) {
                     $sel = ($l['ledger_id'] == $dr_id) ? 'selected' : '';
                     echo "<option value='{$l['ledger_id']}' $sel>{$l['ledger_name']}</option>";
                 }
@@ -154,7 +190,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_voucher' && isset($_GET['
                 $cr_id = null;
                 foreach ($entries as $e) if ($e['type'] === 'Cr') $cr_id = $e['ledger_id'];
 
-                while ($l = $ledgers_cr->fetch_assoc()) {
+                foreach ($ledgers_cr as $l) {
                     $sel = ($l['ledger_id'] == $cr_id) ? 'selected' : '';
                     echo "<option value='{$l['ledger_id']}' $sel>{$l['ledger_name']}</option>";
                 }
@@ -184,17 +220,19 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_voucher' && isset($_GET['
 
 
 // ============================================================================
-// AJAX: GET LEDGERS
+// AJAX: GET LEDGERS (Filtered by Country)
 // Clients can call ?action=get_ledgers to receive JSON list of ledgers
 // ============================================================================
 if (isset($_GET['action']) && $_GET['action'] === 'get_ledgers') {
     $ledgers = [];
-    $res = $conn->query("SELECT ledger_id, ledger_name FROM ledgers ORDER BY ledger_name ASC");
-    if ($res) {
-        while ($r = $res->fetch_assoc()) {
-            $ledgers[] = $r;
-        }
+    $stmt = $conn->prepare("SELECT ledger_id, ledger_name FROM ledgers WHERE country_id = ? ORDER BY ledger_name ASC");
+    $stmt->bind_param("i", $active_country_id);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    while ($r = $res->fetch_assoc()) {
+        $ledgers[] = $r;
     }
+    $stmt->close();
     header('Content-Type: application/json');
     echo json_encode(['ledgers' => $ledgers]);
     exit;
@@ -202,7 +240,6 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_ledgers') {
 
 // ============================================================================
 // AJAX: GET EXCHANGE RATE
-// Clients can call ?action=get_rate&code=USD&date=2026-01-16 to get rate
 // ============================================================================
 if (isset($_GET['action']) && $_GET['action'] === 'get_rate' && isset($_GET['code'])) {
     $code = $_GET['code'];
@@ -222,7 +259,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_rate' && isset($_GET['cod
 
 
 // ============================================================================
-// 3) ADD LEDGER
+// 3) ADD LEDGER (Filtered by Country)
 // ============================================================================
 if (isset($_POST['add_ledger'])) {
 
@@ -240,10 +277,10 @@ if (isset($_POST['add_ledger'])) {
         echo "<script>alert('⚠️ Please select an Account Group.');</script>";
     } else {
         $stmt = $conn->prepare("
-            INSERT INTO ledgers (ledger_name, opening_balance, balance_type, group_id)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO ledgers (ledger_name, opening_balance, balance_type, group_id, country_id)
+            VALUES (?, ?, ?, ?, ?)
         ");
-        $stmt->bind_param("sdsi", $ledger_name, $opening_balance, $balance_type, $group_id);
+        $stmt->bind_param("sdsii", $ledger_name, $opening_balance, $balance_type, $group_id, $active_country_id);
         $stmt->execute();
         $newId = $conn->insert_id;
         if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') {
@@ -258,7 +295,7 @@ if (isset($_POST['add_ledger'])) {
 
 
 // ============================================================================
-// 4) ADD VOUCHER (Insert Dr & Cr Entries)
+// 4) ADD VOUCHER (Insert Dr & Cr Entries, Validate Country)
 // ============================================================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_voucher'])) {
 
@@ -268,7 +305,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_voucher'])) {
     $dr_ledger    = intval($_POST['dr_ledger'] ?? 0);
     $cr_ledger    = intval($_POST['cr_ledger'] ?? 0);
     $amount       = floatval($_POST['amount'] ?? 0);
-    $currency_id  = intval($_POST['currency_id'] ?? 1); // Default to LKR
+    $currency_id  = intval($_POST['currency_id'] ?? 1);
     $exchange_rate = floatval($_POST['exchange_rate'] ?? 1.0);
 
     // Basic validation
@@ -277,25 +314,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_voucher'])) {
         exit;
     }
 
+    // Validate ledgers belong to active country
+    $ledger_check_stmt = $conn->prepare("SELECT COUNT(*) as count FROM ledgers WHERE ledger_id IN (?, ?) AND country_id = ?");
+    $ledger_check_stmt->bind_param("iii", $dr_ledger, $cr_ledger, $active_country_id);
+    $ledger_check_stmt->execute();
+    $ledger_check = $ledger_check_stmt->get_result()->fetch_assoc();
+    $ledger_check_stmt->close();
+    if ($ledger_check['count'] != 2) {
+        header("Location: ?error=cross_country_posting");
+        exit;
+    }
+
     // Compute LKR equivalent
     $amount_lkr = round($amount * $exchange_rate, 2);
 
-    // Insert voucher header
+    // Insert voucher header with country_id
     $stmt = $conn->prepare("
-        INSERT INTO vouchers (voucher_type, date, narration, currency_id, exchange_rate, created_at)
-        VALUES (?, ?, ?, ?, ?, NOW())
+        INSERT INTO vouchers (voucher_type, date, narration, currency_id, exchange_rate, country_id, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, NOW())
     ");
-    $stmt->bind_param("sssid", $voucher_type, $date, $narration, $currency_id, $exchange_rate);
+    $stmt->bind_param("sssidii", $voucher_type, $date, $narration, $currency_id, $exchange_rate, $active_country_id);
     $stmt->execute();
-    /**
-     * Retrieves the ID of the last inserted row from the database connection
-     * and assigns it to the $voucher_id variable.
-     * 
-     * This is typically used after an INSERT operation to get the auto-generated
-     * primary key of the newly created voucher record.
-     * 
-     * @var int $voucher_id The auto-incremented ID of the inserted voucher
-     */
     $voucher_id = $conn->insert_id;
 
     // Insert Debit entry
@@ -320,7 +359,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_voucher'])) {
 
 
 // ============================================================================
-// 5) UPDATE EXISTING VOUCHER (WITH TRANSACTION)
+// 5) UPDATE EXISTING VOUCHER (WITH TRANSACTION, Validate Country)
 // ============================================================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_voucher'])) {
 
@@ -342,6 +381,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_voucher'])) {
         exit;
     }
 
+    // Validate ledgers belong to active country
+    $ledger_check_stmt = $conn->prepare("SELECT COUNT(*) as count FROM ledgers WHERE ledger_id IN (?, ?) AND country_id = ?");
+    $ledger_check_stmt->bind_param("iii", $dr_ledger, $cr_ledger, $active_country_id);
+    $ledger_check_stmt->execute();
+    $ledger_check = $ledger_check_stmt->get_result()->fetch_assoc();
+    $ledger_check_stmt->close();
+    if ($ledger_check['count'] != 2) {
+        header("Location: ?error=cross_country_posting");
+        exit;
+    }
+
     // Compute LKR equivalent
     $amount_lkr = round($amount * $exchange_rate, 2);
 
@@ -358,9 +408,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_voucher'])) {
         $ustmt = $conn->prepare("
             UPDATE vouchers
             SET voucher_type = ?, date = ?, narration = ?, currency_id = ?, exchange_rate = ?
-            WHERE voucher_id = ?
+            WHERE voucher_id = ? AND country_id = ?
         ");
-        $ustmt->bind_param("sssidi", $voucher_type, $date, $narration, $currency_id, $exchange_rate, $id);
+        $ustmt->bind_param("sssidii", $voucher_type, $date, $narration, $currency_id, $exchange_rate, $id, $active_country_id);
         $ustmt->execute();
         $ustmt->close();
 
@@ -495,8 +545,8 @@ if (isset($_POST['delete_voucher'])) {
             $stmt->close();
 
             // Delete parent voucher
-            $stmt2 = $conn->prepare("DELETE FROM vouchers WHERE voucher_id = ?");
-            $stmt2->bind_param("i", $voucher_id);
+            $stmt2 = $conn->prepare("DELETE FROM vouchers WHERE voucher_id = ? AND country_id = ?");
+            $stmt2->bind_param("ii", $voucher_id, $active_country_id);
             $stmt2->execute();
             $stmt2->close();
 
@@ -519,30 +569,40 @@ if (isset($_POST['delete_voucher'])) {
 
 
 // ============================================================================
-// 8) FETCH DATA FOR FRONTEND TABLES
+// 8) FETCH DATA FOR FRONTEND TABLES (Filtered by Country)
 // ============================================================================
 
-// Fetch ledgers list
-$ledgers = $conn->query("
+// Fetch ledgers list (filtered)
+$ledgers_stmt = $conn->prepare("
     SELECT ledger_id, ledger_name
     FROM ledgers
+    WHERE country_id = ?
     ORDER BY ledger_name ASC
 ");
+$ledgers_stmt->bind_param("i", $active_country_id);
+$ledgers_stmt->execute();
+$ledgers = $ledgers_stmt->get_result();
+$ledgers_stmt->close();
 
-// Fetch vouchers with entries combined
-$vouchers = $conn->query("
+// Fetch vouchers with entries combined (filtered)
+$vouchers_stmt = $conn->prepare("
     SELECT v.voucher_id, v.voucher_type, v.date, v.narration,
            GROUP_CONCAT(CONCAT(l.ledger_name, ' ', ve.type, ' ', ve.amount_lkr)
            SEPARATOR '<br>') AS entries
     FROM vouchers v
     JOIN voucher_entries ve ON v.voucher_id = ve.voucher_id
     JOIN ledgers l ON ve.ledger_id = l.ledger_id
+    WHERE v.country_id = ?
     GROUP BY v.voucher_id
     ORDER BY v.voucher_id DESC
 ");
+$vouchers_stmt->bind_param("i", $active_country_id);
+$vouchers_stmt->execute();
+$vouchers = $vouchers_stmt->get_result();
+$vouchers_stmt->close();
 
-// Fetch ledger balances using Opening + Dr - Cr
-$balances = $conn->query("
+// Fetch ledger balances using Opening + Dr - Cr (filtered)
+$balances_stmt = $conn->prepare("
     SELECT 
         l.ledger_id,
         l.ledger_name,
@@ -562,8 +622,14 @@ $balances = $conn->query("
 
     FROM ledgers l
     LEFT JOIN voucher_entries ve ON l.ledger_id = ve.ledger_id
+    LEFT JOIN vouchers v ON ve.voucher_id = v.voucher_id
+    WHERE l.country_id = ? AND (v.country_id = ? OR v.country_id IS NULL)
     GROUP BY l.ledger_id
 ");
+$balances_stmt->bind_param("ii", $active_country_id, $active_country_id);
+$balances_stmt->execute();
+$balances = $balances_stmt->get_result();
+$balances_stmt->close();
 
 // ============================================================================
 // 9) GET EXCHANGE RATE (AJAX)

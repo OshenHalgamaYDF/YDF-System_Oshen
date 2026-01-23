@@ -6,6 +6,7 @@
 //                 vouchers(voucher_id, voucher_type, date, narration),
 //                 voucher_entries(entry_id, voucher_id, ledger_id, type, amount)
 // ---------------------------------------------------------
+session_start(); // Start session for country selection
 
 $servername = "localhost";
 $username   = "root";
@@ -15,6 +16,23 @@ $database   = "ydf-system";
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 $conn = new mysqli($servername, $username, $password, $database);
 $conn->set_charset('utf8mb4');
+
+// ============================================================================
+// COUNTRY SELECTION HANDLING
+// ============================================================================
+if (!isset($_SESSION['country_id'])) {
+    $default_country = $conn->query("SELECT id FROM countries ORDER BY id ASC LIMIT 1")->fetch_assoc();
+    $_SESSION['country_id'] = $default_country ? $default_country['id'] : 1;
+}
+
+$active_country_id = $_SESSION['country_id'];
+
+// Fetch active country details
+$country_stmt = $conn->prepare("SELECT country_name, currency_code FROM countries WHERE id = ?");
+$country_stmt->bind_param("i", $active_country_id);
+$country_stmt->execute();
+$active_country = $country_stmt->get_result()->fetch_assoc();
+$country_stmt->close();
 
 $suspense_message = '';
 
@@ -39,24 +57,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_suspense'])) {
             $conn->begin_transaction();
 
             // 1) ensure account_groups entry exists (group_type = 'Suspense')
-            $gstmt = $conn->prepare("SELECT group_id FROM account_groups WHERE group_name = ? LIMIT 1");
-            $gstmt->bind_param("s", $group_name);
+            $gstmt = $conn->prepare("SELECT group_id FROM account_groups WHERE group_name = ? AND country_id = ? LIMIT 1");
+            $gstmt->bind_param("si", $group_name, $active_country_id);
             $gstmt->execute();
             $gstmt->bind_result($group_id);
             $gstmt->fetch();
             $gstmt->close();
 
             if (empty($group_id)) {
-                $gin = $conn->prepare("INSERT INTO account_groups (group_name, group_type) VALUES (?, 'Suspense')");
-                $gin->bind_param("s", $group_name);
+                $gin = $conn->prepare("INSERT INTO account_groups (group_name, group_type, country_id) VALUES (?, 'Suspense', ?)");
+                $gin->bind_param("si", $group_name, $active_country_id);
                 $gin->execute();
                 $group_id = $gin->insert_id;
                 $gin->close();
             }
 
             // 2) ensure suspense ledger exists
-            $lstmt = $conn->prepare("SELECT ledger_id FROM ledgers WHERE ledger_name = ? LIMIT 1");
-            $lstmt->bind_param("s", $suspense_name);
+            $lstmt = $conn->prepare("SELECT ledger_id FROM ledgers WHERE ledger_name = ? AND country_id = ? LIMIT 1");
+            $lstmt->bind_param("si", $suspense_name, $active_country_id);
             $lstmt->execute();
             $lstmt->bind_result($suspense_id);
             $lstmt->fetch();
@@ -64,8 +82,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_suspense'])) {
 
             if (empty($suspense_id)) {
                 // opening_balance 0, keep balance_type 'Dr' (neutral for zero)
-                $lin = $conn->prepare("INSERT INTO ledgers (ledger_name, opening_balance, balance_type, group_id) VALUES (?, 0, 'Dr', ?)");
-                $lin->bind_param("si", $suspense_name, $group_id);
+                $lin = $conn->prepare("INSERT INTO ledgers (ledger_name, opening_balance, balance_type, group_id, country_id) VALUES (?, 0, 'Dr', ?, ?)");
+                $lin->bind_param("sii", $suspense_name, $group_id, $active_country_id);
                 $lin->execute();
                 $suspense_id = $lin->insert_id;
                 $lin->close();
@@ -73,9 +91,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_suspense'])) {
             }
 
             // 3) create voucher & entry to balance TB
-            $vstmt = $conn->prepare("INSERT INTO vouchers (voucher_type, date, narration) VALUES (?, ?, ?)");
+            $vstmt = $conn->prepare("INSERT INTO vouchers (voucher_type, date, narration, country_id) VALUES (?, ?, ?, ?)");
             $vtype = 'Journal';
-            $vstmt->bind_param("sss", $vtype, $today, $narration);
+            $vstmt->bind_param("sssi", $vtype, $today, $narration, $active_country_id);
             $vstmt->execute();
             $voucher_id = $vstmt->insert_id;
             $vstmt->close();
@@ -106,26 +124,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_suspense'])) {
 }
 
 // --- Query ledgers with net balance calculation (with date range filter) ---
-$q = $conn->query("
+$stmt = $conn->prepare("
     SELECT 
         l.ledger_id,
         l.ledger_name,
         l.opening_balance,
         l.balance_type,
-        COALESCE(SUM(CASE WHEN ve.type='Dr' AND v.date >= '$filter_from' AND v.date <= '$filter_to' THEN ve.amount ELSE 0 END),0) AS total_dr,
-        COALESCE(SUM(CASE WHEN ve.type='Cr' AND v.date >= '$filter_from' AND v.date <= '$filter_to' THEN ve.amount ELSE 0 END),0) AS total_cr,
+        COALESCE(SUM(CASE WHEN ve.type='Dr' AND v.date >= ? AND v.date <= ? THEN ve.amount ELSE 0 END),0) AS total_dr,
+        COALESCE(SUM(CASE WHEN ve.type='Cr' AND v.date >= ? AND v.date <= ? THEN ve.amount ELSE 0 END),0) AS total_cr,
         (
           (CASE WHEN UPPER(l.balance_type)='DR' THEN COALESCE(l.opening_balance,0) ELSE -COALESCE(l.opening_balance,0) END)
-          + COALESCE(SUM(CASE WHEN ve.type='Dr' AND v.date >= '$filter_from' AND v.date <= '$filter_to' THEN ve.amount ELSE 0 END),0)
-          - COALESCE(SUM(CASE WHEN ve.type='Cr' AND v.date >= '$filter_from' AND v.date <= '$filter_to' THEN ve.amount ELSE 0 END),0)
+          + COALESCE(SUM(CASE WHEN ve.type='Dr' AND v.date >= ? AND v.date <= ? THEN ve.amount ELSE 0 END),0)
+          - COALESCE(SUM(CASE WHEN ve.type='Cr' AND v.date >= ? AND v.date <= ? THEN ve.amount ELSE 0 END),0)
         ) AS net_balance
     FROM ledgers l
     LEFT JOIN voucher_entries ve ON l.ledger_id = ve.ledger_id
     LEFT JOIN vouchers v ON ve.voucher_id = v.voucher_id
+    WHERE l.country_id = ?
     GROUP BY l.ledger_id, l.ledger_name, l.opening_balance, l.balance_type
     HAVING ABS(net_balance) > 0.009 OR LOWER(l.ledger_name) = 'suspense account'
     ORDER BY l.ledger_name ASC
 ");
+$stmt->bind_param("sssssssi", $filter_from, $filter_to, $filter_from, $filter_to, $filter_from, $filter_to, $filter_from, $filter_to, $active_country_id);
+$stmt->execute();
+$q = $stmt->get_result();
 
 $ledgers = [];
 if ($q && $q->num_rows > 0) {
@@ -136,16 +158,19 @@ if ($q && $q->num_rows > 0) {
 }
 
 // --- Income / Expense summary for Net Income (Retained earnings) ---
-$summary = $conn->query("
+$summary_stmt = $conn->prepare("
     SELECT
-      COALESCE(SUM(CASE WHEN g.group_type='Income' AND v.date >= '$filter_from' AND v.date <= '$filter_to' THEN ve.amount * (CASE WHEN ve.type='Cr' THEN 1 WHEN ve.type='Dr' THEN -1 ELSE 0 END) ELSE 0 END),0) AS income_net,
-      COALESCE(SUM(CASE WHEN g.group_type='Expense' AND v.date >= '$filter_from' AND v.date <= '$filter_to' THEN ve.amount * (CASE WHEN ve.type='Dr' THEN 1 WHEN ve.type='Cr' THEN -1 ELSE 0 END) ELSE 0 END),0) AS expense_net
+      COALESCE(SUM(CASE WHEN g.group_type='Income' AND v.date >= ? AND v.date <= ? THEN ve.amount * (CASE WHEN ve.type='Cr' THEN 1 WHEN ve.type='Dr' THEN -1 ELSE 0 END) ELSE 0 END),0) AS income_net,
+      COALESCE(SUM(CASE WHEN g.group_type='Expense' AND v.date >= ? AND v.date <= ? THEN ve.amount * (CASE WHEN ve.type='Dr' THEN 1 WHEN ve.type='Cr' THEN -1 ELSE 0 END) ELSE 0 END),0) AS expense_net
     FROM voucher_entries ve
     JOIN ledgers l ON ve.ledger_id = l.ledger_id
     JOIN account_groups g ON l.group_id = g.group_id
     JOIN vouchers v ON ve.voucher_id = v.voucher_id
-    WHERE g.group_type IN ('Income','Expense')
+    WHERE g.group_type IN ('Income','Expense') AND l.country_id = ? AND v.country_id = ?
 ");
+$summary_stmt->bind_param("ssssii", $filter_from, $filter_to, $filter_from, $filter_to, $active_country_id, $active_country_id);
+$summary_stmt->execute();
+$summary = $summary_stmt->get_result();
 $summaryData = $summary->fetch_assoc();
 $income_net  = floatval($summaryData['income_net'] ?? 0);
 $expense_net = floatval($summaryData['expense_net'] ?? 0);

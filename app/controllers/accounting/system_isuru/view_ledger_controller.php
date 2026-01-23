@@ -2,6 +2,8 @@
 // ========================================
 // VIEW LEDGER (combined AJAX partial + full page) with Export + Date range filter
 // ========================================
+session_start(); // Start session for country selection
+
 $servername = "localhost";
 $username   = "root";
 $password   = "";
@@ -14,6 +16,23 @@ if ($conn->connect_error) {
     exit;
 }
 $conn->set_charset('utf8mb4');
+
+// ============================================================================
+// COUNTRY SELECTION HANDLING
+// ============================================================================
+if (!isset($_SESSION['country_id'])) {
+    $default_country = $conn->query("SELECT id FROM countries ORDER BY id ASC LIMIT 1")->fetch_assoc();
+    $_SESSION['country_id'] = $default_country ? $default_country['id'] : 1;
+}
+
+$active_country_id = $_SESSION['country_id'];
+
+// Fetch active country details
+$country_stmt = $conn->prepare("SELECT country_name, currency_code FROM countries WHERE id = ?");
+$country_stmt->bind_param("i", $active_country_id);
+$country_stmt->execute();
+$active_country = $country_stmt->get_result()->fetch_assoc();
+$country_stmt->close();
 
 // --- Helper: validate date ---
 function valid_date($d) {
@@ -35,8 +54,8 @@ if ($ledgerIdParam && isset($_GET['export']) && $_GET['export'] === 'excel') {
         die("Invalid ledger id for export.");
     }
 
-    $stmtL = $conn->prepare("SELECT ledger_name, opening_balance, balance_type FROM ledgers WHERE ledger_id = ? LIMIT 1");
-    $stmtL->bind_param("i", $id);
+    $stmtL = $conn->prepare("SELECT ledger_name, opening_balance, balance_type FROM ledgers WHERE ledger_id = ? AND country_id = ? LIMIT 1");
+    $stmtL->bind_param("ii", $id, $active_country_id);
     $stmtL->execute();
     $resL = $stmtL->get_result();
     if (!$resL || $resL->num_rows === 0) {
@@ -55,14 +74,10 @@ if ($ledgerIdParam && isset($_GET['export']) && $_GET['export'] === 'excel') {
         SELECT v.date, v.voucher_type, ve.type, ve.amount, v.narration, v.voucher_id
         FROM voucher_entries ve
         JOIN vouchers v ON ve.voucher_id = v.voucher_id
-        WHERE ve.ledger_id = ? AND v.date >= ? AND v.date <= ?
+        WHERE ve.ledger_id = ? AND v.date >= ? AND v.date <= ? AND v.country_id = ?
         ORDER BY v.date ASC, v.voucher_id ASC
     ");
-    $tstmt->bind_param("iss", $id, $filter_from, $filter_to);
-    $tstmt->execute();
-    $q = $tstmt->get_result();
-
-    header('Content-Type: text/csv; charset=UTF-8');
+    $tstmt->bind_param("issi", $id, $filter_from, $filter_to, $active_country_id);
     $safeName = preg_replace('/[^a-z0-9_\-]/i','_', $ledger_name ?: 'ledger_'.$id);
     $filename = "ledger_{$safeName}_" . $filter_from . "_to_" . $filter_to . ".csv";
     header('Content-Disposition: attachment; filename="'.$filename.'"');
@@ -144,18 +159,14 @@ if ($ledgerIdParam) {
         SELECT v.date, v.voucher_type, ve.type, ve.amount, v.narration, v.voucher_id
         FROM voucher_entries ve
         JOIN vouchers v ON ve.voucher_id = v.voucher_id
-        WHERE ve.ledger_id = ? AND v.date >= ? AND v.date <= ?
+        WHERE ve.ledger_id = ? AND v.date >= ? AND v.date <= ? AND v.country_id = ?
         ORDER BY v.date ASC, v.voucher_id ASC
     ");
     if (!$tstmt) {
         echo "<div class='alert alert-danger'>Query error: " . htmlspecialchars($conn->error) . "</div>";
         exit;
     }
-    $tstmt->bind_param("iss", $id, $filter_from, $filter_to);
-    $tstmt->execute();
-    $q = $tstmt->get_result();
-
-    $running_balance = ($balance_type === 'DR') ? $opening_balance : -$opening_balance;
+    $tstmt->bind_param("issi", $id, $filter_from, $filter_to, $active_country_id);
     $totalDr = 0.0;
     $totalCr = 0.0;
 
@@ -241,5 +252,9 @@ if ($ledgerIdParam) {
 }
 
 // ---------- Full page ----------
-$ledgers = $conn->query("SELECT ledger_id, ledger_name FROM ledgers ORDER BY ledger_name ASC");
+$ledgers_stmt = $conn->prepare("SELECT ledger_id, ledger_name FROM ledgers WHERE country_id = ? ORDER BY ledger_name ASC");
+$ledgers_stmt->bind_param("i", $active_country_id);
+$ledgers_stmt->execute();
+$ledgers = $ledgers_stmt->get_result();
+$ledgers_stmt->close();
 ?>

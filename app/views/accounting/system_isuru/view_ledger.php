@@ -16,7 +16,7 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\system_isur
         <div class="card shadow-sm mb-3">
             <div class="card-header d-flex justify-content-between align-items-center bg-info text-white">
                 <div>
-                    <h5 class="mb-0">📘 View Ledger</h5>
+                    <h5 class="mb-0">📘 View Ledger - <?= htmlspecialchars($active_country['country_name']) ?> (<?= htmlspecialchars($active_country['currency_code']) ?>)</h5>
                     <small class="text-white-50">Select a ledger to view detailed transactions</small>
                 </div>
                 <a class="btn btn-light btn-sm" href="accounting.php">← Back</a>

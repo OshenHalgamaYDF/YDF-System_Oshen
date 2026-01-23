@@ -15,7 +15,7 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\system_isur
 <div class="container mb-4">
     <div class="card shadow-lg">
         <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
-            <h5 class="mb-0">📘 Balance Sheet</h5>
+            <h5 class="mb-0">📘 Balance Sheet - <?= htmlspecialchars($active_country['country_name']) ?> (<?= htmlspecialchars($active_country['currency_code']) ?>)</h5>
             <div>
                 <?php
                     $queryParams = [];

@@ -39,7 +39,24 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\system_isur
 
 <div class="container mb-4">
     <!-- Page heading -->
-    <h2>YDF Accounting System</h2>
+    <h2>YDF Accounting System - <?= htmlspecialchars($active_country['country_name']) ?> (<?= htmlspecialchars($active_country['currency_code']) ?>)</h2>
+
+    <!-- Country Selector -->
+    <div class="mb-4">
+        <form method="POST" class="d-inline">
+            <label for="countrySelect" class="form-label">Select Country:</label>
+            <select name="country_id" id="countrySelect" class="form-select d-inline w-auto" onchange="this.form.submit()">
+                <?php
+                $countries = $conn->query("SELECT id, country_name FROM countries ORDER BY country_name ASC");
+                while ($c = $countries->fetch_assoc()) {
+                    $sel = ($c['id'] == $active_country_id) ? 'selected' : '';
+                    echo "<option value='{$c['id']}' $sel>{$c['country_name']}</option>";
+                }
+                ?>
+            </select>
+            <input type="hidden" name="select_country" value="1">
+        </form>
+    </div>
 
     <!-- Quick action buttons (open modals or navigate to reports) -->
     <div class="btn-group-custom mb-4">
@@ -80,6 +97,7 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\system_isur
                 case 'invalid_input': echo 'Invalid input data'; break;
                 case 'bad_id': echo 'Invalid voucher ID'; break;
                 case 'same_ledgers': echo 'Debit and Credit ledgers cannot be the same'; break;
+                case 'cross_country_posting': echo 'Cannot post between ledgers from different countries'; break;
                 case 'delete_failed': echo 'Failed to delete voucher'; break;
                 case 'update_failed': echo 'Failed to update voucher'; break;
                 default: echo htmlspecialchars($_GET['error']);
@@ -237,7 +255,7 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\system_isur
                  <input type="date" name="date" class="form-control" required value="<?= date('Y-m-d'); ?>">
               </div>
               <div class="col-md-3">
-                 <label>Amount</label>
+                 <label>Amount (<?= htmlspecialchars($active_country['currency_code']) ?>)</label>
                  <input type="text" name="amount" id="amountInput" class="form-control" required placeholder="e.g., $100 or 100">
               </div>
               <div class="col-md-3">
@@ -266,12 +284,14 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\system_isur
                  <select name="dr_ledger" id="drLedgerSelect" class="form-select" required>
                     <option value="">-- Select --</option>
                     <?php
-                    $ledgersDr = $conn->query("SELECT ledger_id, ledger_name FROM ledgers ORDER BY ledger_name ASC");
-                    if ($ledgersDr && $ledgersDr->num_rows > 0) {
-                        while ($l = $ledgersDr->fetch_assoc()) {
-                           echo "<option value='" . intval($l['ledger_id']) . "'>" . htmlspecialchars($l['ledger_name']) . "</option>";
-                        }
+                    $ledgersDr = $conn->prepare("SELECT ledger_id, ledger_name FROM ledgers WHERE country_id = ? ORDER BY ledger_name ASC");
+                    $ledgersDr->bind_param("i", $active_country_id);
+                    $ledgersDr->execute();
+                    $resDr = $ledgersDr->get_result();
+                    while ($l = $resDr->fetch_assoc()) {
+                       echo "<option value='" . intval($l['ledger_id']) . "'>" . htmlspecialchars($l['ledger_name']) . "</option>";
                     }
+                    $ledgersDr->close();
                     ?>
                 </select>
                 </div>
@@ -280,12 +300,14 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\system_isur
                    <select name="cr_ledger" id="crLedgerSelect" class="form-select" required>
                       <option value="">-- Select --</option>
                       <?php
-                      $ledgersCr = $conn->query("SELECT ledger_id, ledger_name FROM ledgers ORDER BY ledger_name ASC");
-                      if ($ledgersCr && $ledgersCr->num_rows > 0) {
-                          while ($l = $ledgersCr->fetch_assoc()) {
-                             echo "<option value='" . intval($l['ledger_id']) . "'>" . htmlspecialchars($l['ledger_name']) . "</option>";
-                          }
+                      $ledgersCr = $conn->prepare("SELECT ledger_id, ledger_name FROM ledgers WHERE country_id = ? ORDER BY ledger_name ASC");
+                      $ledgersCr->bind_param("i", $active_country_id);
+                      $ledgersCr->execute();
+                      $resCr = $ledgersCr->get_result();
+                      while ($l = $resCr->fetch_assoc()) {
+                         echo "<option value='" . intval($l['ledger_id']) . "'>" . htmlspecialchars($l['ledger_name']) . "</option>";
                       }
+                      $ledgersCr->close();
                       ?>
                    </select>
                 </div>
@@ -309,15 +331,15 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\system_isur
             <select name="group_id" class="form-select mb-2" required>
                 <option value="">-- Select Account Group --</option>
                 <?php
-              $groups = $conn->query("SELECT group_id, group_name, group_type FROM account_groups ORDER BY group_name ASC");
-              if ($groups && $groups->num_rows > 0) {
-                 while ($g = $groups->fetch_assoc()) {
-                      echo "<option value='" . intval($g['group_id']) . "'>" . htmlspecialchars($g['group_name']) . " (" . htmlspecialchars($g['group_type']) . ")</option>";
-                      }
-                      } else {
-                         echo "<option value=''>No account groups found - please create one first</option>";
-                         }
-                         ?>
+              $groups = $conn->prepare("SELECT group_id, group_name, group_type FROM account_groups WHERE country_id = ? ORDER BY group_name ASC");
+              $groups->bind_param("i", $active_country_id);
+              $groups->execute();
+              $resGroups = $groups->get_result();
+              while ($g = $resGroups->fetch_assoc()) {
+                 echo "<option value='" . intval($g['group_id']) . "'>" . htmlspecialchars($g['group_name']) . " (" . htmlspecialchars($g['group_type']) . ")</option>";
+              }
+              $groups->close();
+              ?>
             </select>
             <label>Ledger Name</label>
             <input type="text" name="ledger_name" class="form-control mb-2" required>

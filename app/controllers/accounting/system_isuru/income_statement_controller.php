@@ -2,6 +2,8 @@
 // =============================
 // INCOME STATEMENT (Group-based with Date Range Filter)
 // =============================
+session_start(); // Start session for country selection
+
 $servername = "localhost";
 $username = "root";
 $password = "";
@@ -10,6 +12,23 @@ $database = "ydf-system";
 $conn = new mysqli($servername, $username, $password, $database);
 if ($conn->connect_error) die("Connection failed: " . $conn->connect_error);
 $conn->set_charset('utf8mb4');
+
+// ============================================================================
+// COUNTRY SELECTION HANDLING
+// ============================================================================
+if (!isset($_SESSION['country_id'])) {
+    $default_country = $conn->query("SELECT id FROM countries ORDER BY id ASC LIMIT 1")->fetch_assoc();
+    $_SESSION['country_id'] = $default_country ? $default_country['id'] : 1;
+}
+
+$active_country_id = $_SESSION['country_id'];
+
+// Fetch active country details
+$country_stmt = $conn->prepare("SELECT country_name, currency_code FROM countries WHERE id = ?");
+$country_stmt->bind_param("i", $active_country_id);
+$country_stmt->execute();
+$active_country = $country_stmt->get_result()->fetch_assoc();
+$country_stmt->close();
 
 // --- Helper: validate date ---
 function valid_date($d) {
@@ -27,7 +46,7 @@ $toEsc   = $conn->real_escape_string($filter_to);
 $dateExpr = "v.date >= '{$fromEsc}' AND v.date <= '{$toEsc}'";
 
 // =====================
-// 1️⃣ Query all ledgers + their group type + totals (date filtered)
+// 1️⃣ Query all ledgers + their group type + totals (date filtered and country filtered)
 // =====================
 $query = "
     SELECT 
@@ -42,12 +61,17 @@ $query = "
     LEFT JOIN vouchers v ON ve.voucher_id = v.voucher_id
     LEFT JOIN account_groups g ON g.group_id = l.group_id
     WHERE g.group_type IN ('Income', 'Expense')
+      AND l.country_id = ?
+      AND v.country_id = ?
       AND $dateExpr
     GROUP BY l.ledger_id, l.ledger_name, g.group_name, g.group_type
     ORDER BY g.group_type, l.ledger_name
 ";
 
-$result = $conn->query($query);
+$stmt = $conn->prepare($query);
+$stmt->bind_param("ii", $active_country_id, $active_country_id);
+$stmt->execute();
+$result = $stmt->get_result();
 
 $accounts = [];
 if ($result && $result->num_rows > 0) {
