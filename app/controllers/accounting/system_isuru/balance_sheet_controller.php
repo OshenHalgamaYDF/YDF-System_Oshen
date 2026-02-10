@@ -54,7 +54,7 @@ if ($filter_from && $filter_to) {
     $dateExpr = "v.date <= '{$conn->real_escape_string($filter_to)}'";
 }
 
-// --- Calculate Net Income dynamically based on date filter ---
+// --- Calculate Net Income dynamically based on date filter (GLOBAL, not country filtered) ---
 $income_stmt = $conn->prepare("
     SELECT
       COALESCE(SUM(CASE WHEN g.group_type='Income' THEN ve.amount * 
@@ -65,15 +65,14 @@ $income_stmt = $conn->prepare("
     JOIN vouchers v ON ve.voucher_id = v.voucher_id
     JOIN ledgers l ON ve.ledger_id = l.ledger_id
     JOIN account_groups g ON l.group_id = g.group_id
-    WHERE g.group_type IN ('Income','Expense') AND l.country_id = ? AND v.country_id = ? AND $dateExpr
+    WHERE g.group_type IN ('Income','Expense') AND $dateExpr
 ");
-$income_stmt->bind_param("ii", $active_country_id, $active_country_id);
 $income_stmt->execute();
 $income_data = $income_stmt->get_result()->fetch_assoc();
 $income_stmt->close();
 $net_income = ($income_data['income_total'] ?? 0) - ($income_data['expense_total'] ?? 0);
 
-// --- Fetch all ledgers with balances (respect dateExpr) ---
+// --- Fetch all ledgers with balances (GLOBAL - not country filtered, respect dateExpr) ---
 $query = "
     SELECT 
         l.ledger_id,
@@ -89,13 +88,10 @@ $query = "
     LEFT JOIN voucher_entries ve ON ve.ledger_id = l.ledger_id
     LEFT JOIN vouchers v ON ve.voucher_id = v.voucher_id
     WHERE COALESCE(ag.group_type,'') IN ('Asset','Liability','Equity','Suspense')
-      AND l.country_id = ?
-      AND (v.country_id = ? OR v.country_id IS NULL)
     GROUP BY l.ledger_id
     ORDER BY ag.group_type, ag.group_name, l.ledger_name
 ";
 $stmt = $conn->prepare($query);
-$stmt->bind_param("ii", $active_country_id, $active_country_id);
 $stmt->execute();
 $result = $stmt->get_result();
 

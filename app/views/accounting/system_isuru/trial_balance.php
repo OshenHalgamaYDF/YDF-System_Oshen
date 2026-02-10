@@ -23,7 +23,7 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\system_isur
     <div class="card shadow-sm">
         <div class="card-header bg-warning d-flex justify-content-between align-items-center">
             <div>
-                <h5 class="mb-0"><i class="bi bi-calculator"></i> Trial Balance - <?= htmlspecialchars($active_country['country_name']) ?> (<?= htmlspecialchars($active_country['currency_code']) ?>)</h5>
+                <h5 class="mb-0"><i class="bi bi-calculator"></i> Trial Balance - Consolidated (All Countries)</h5>
                 <small class="muted-small">Verify debit and credit totals match</small>
             </div>
             <div class="d-flex gap-2 no-print">

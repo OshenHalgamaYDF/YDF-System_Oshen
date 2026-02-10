@@ -18,7 +18,7 @@ $conn = new mysqli($servername, $username, $password, $database);
 $conn->set_charset('utf8mb4');
 
 // ============================================================================
-// COUNTRY SELECTION HANDLING
+// COUNTRY SELECTION HANDLING (Removed - now shows consolidated data)
 // ============================================================================
 if (!isset($_SESSION['country_id'])) {
     $default_country = $conn->query("SELECT id FROM countries ORDER BY id ASC LIMIT 1")->fetch_assoc();
@@ -123,7 +123,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_suspense'])) {
     }
 }
 
-// --- Query ledgers with net balance calculation (with date range filter) ---
+// --- Query ledgers with net balance calculation (GLOBAL - not country filtered, with date range filter) ---
 $stmt = $conn->prepare("
     SELECT 
         l.ledger_id,
@@ -140,12 +140,11 @@ $stmt = $conn->prepare("
     FROM ledgers l
     LEFT JOIN voucher_entries ve ON l.ledger_id = ve.ledger_id
     LEFT JOIN vouchers v ON ve.voucher_id = v.voucher_id
-    WHERE l.country_id = ?
     GROUP BY l.ledger_id, l.ledger_name, l.opening_balance, l.balance_type
     HAVING ABS(net_balance) > 0.009 OR LOWER(l.ledger_name) = 'suspense account'
     ORDER BY l.ledger_name ASC
 ");
-$stmt->bind_param("sssssssi", $filter_from, $filter_to, $filter_from, $filter_to, $filter_from, $filter_to, $filter_from, $filter_to, $active_country_id);
+$stmt->bind_param("ssssssss", $filter_from, $filter_to, $filter_from, $filter_to, $filter_from, $filter_to, $filter_from, $filter_to);
 $stmt->execute();
 $q = $stmt->get_result();
 
@@ -157,7 +156,7 @@ if ($q && $q->num_rows > 0) {
     }
 }
 
-// --- Income / Expense summary for Net Income (Retained earnings) ---
+// --- Income / Expense summary for Net Income (GLOBAL - not country filtered, Retained earnings) ---
 $summary_stmt = $conn->prepare("
     SELECT
       COALESCE(SUM(CASE WHEN g.group_type='Income' AND v.date >= ? AND v.date <= ? THEN ve.amount * (CASE WHEN ve.type='Cr' THEN 1 WHEN ve.type='Dr' THEN -1 ELSE 0 END) ELSE 0 END),0) AS income_net,
@@ -166,15 +165,30 @@ $summary_stmt = $conn->prepare("
     JOIN ledgers l ON ve.ledger_id = l.ledger_id
     JOIN account_groups g ON l.group_id = g.group_id
     JOIN vouchers v ON ve.voucher_id = v.voucher_id
-    WHERE g.group_type IN ('Income','Expense') AND l.country_id = ? AND v.country_id = ?
+    WHERE g.group_type IN ('Income','Expense')
 ");
-$summary_stmt->bind_param("ssssii", $filter_from, $filter_to, $filter_from, $filter_to, $active_country_id, $active_country_id);
+$summary_stmt->bind_param("ssss", $filter_from, $filter_to, $filter_from, $filter_to);
 $summary_stmt->execute();
 $summary = $summary_stmt->get_result();
 $summaryData = $summary->fetch_assoc();
 $income_net  = floatval($summaryData['income_net'] ?? 0);
 $expense_net = floatval($summaryData['expense_net'] ?? 0);
 $net_income   = $income_net - $expense_net;
+
+// --- Calculate Trial Balance totals and check if balanced ---
+$totalDr = 0.0;
+$totalCr = 0.0;
+
+foreach ($ledgers as $row) {
+    $net = (float)$row['net_balance'];
+    $debit  = $net > 0 ? $net : 0.0;
+    $credit = $net < 0 ? -$net : 0.0;
+    $totalDr += $debit;
+    $totalCr += $credit;
+}
+
+$difference = abs($totalDr - $totalCr);
+$is_balanced = $difference < 0.01;
 
 // --- Export to Excel (CSV) if requested ---
 if (isset($_GET['export']) && $_GET['export'] === 'excel') {
@@ -189,9 +203,6 @@ if (isset($_GET['export']) && $_GET['export'] === 'excel') {
     fputcsv($out, ['Trial Balance from ' . $filter_from . ' to ' . $filter_to]);
     fputcsv($out, ['Account', 'Debit (Rs.)', 'Credit (Rs.)']);
 
-    $totalDr = 0.0;
-    $totalCr = 0.0;
-
     foreach ($ledgers as $row) {
         $name = $row['ledger_name'];
         $net  = (float)$row['net_balance'];
@@ -199,17 +210,12 @@ if (isset($_GET['export']) && $_GET['export'] === 'excel') {
         $debit  = $net > 0 ? $net : 0.0;
         $credit = $net < 0 ? -$net : 0.0;
 
-        $totalDr += $debit;
-        $totalCr += $credit;
-
         fputcsv($out, [$name, number_format($debit, 2, '.', ''), number_format($credit, 2, '.', '')]);
     }
 
     // Totals
     fputcsv($out, ['Total', number_format($totalDr, 2, '.', ''), number_format($totalCr, 2, '.', '')]);
 
-    $difference = abs($totalDr - $totalCr);
-    $is_balanced = $difference < 0.01;
     $status = $is_balanced ? 'Trial Balance is BALANCED' : 'Imbalance Detected: Difference Rs. ' . number_format($difference, 2);
 
     fputcsv($out, ['Status', $status, '']);

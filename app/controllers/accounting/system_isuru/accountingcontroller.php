@@ -93,9 +93,8 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_voucher' && isset($_GET['
     $entries = $estmt->get_result()->fetch_all(MYSQLI_ASSOC);
     $estmt->close();
 
-    // ------------------ Fetch Ledgers For Dropdowns (Filtered by Country) ------------
-    $ledgers_stmt = $conn->prepare("SELECT ledger_id, ledger_name FROM ledgers WHERE country_id = ? ORDER BY ledger_name ASC");
-    $ledgers_stmt->bind_param("i", $active_country_id);
+    // ------------------ Fetch Ledgers For Dropdowns (Global) ------------
+    $ledgers_stmt = $conn->prepare("SELECT ledger_id, ledger_name FROM ledgers ORDER BY ledger_name ASC");
     $ledgers_stmt->execute();
     $ledgers_result = $ledgers_stmt->get_result();
     $ledgers_dr = [];
@@ -220,13 +219,12 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_voucher' && isset($_GET['
 
 
 // ============================================================================
-// AJAX: GET LEDGERS (Filtered by Country)
+// AJAX: GET LEDGERS (Global - not filtered by Country)
 // Clients can call ?action=get_ledgers to receive JSON list of ledgers
 // ============================================================================
 if (isset($_GET['action']) && $_GET['action'] === 'get_ledgers') {
     $ledgers = [];
-    $stmt = $conn->prepare("SELECT ledger_id, ledger_name FROM ledgers WHERE country_id = ? ORDER BY ledger_name ASC");
-    $stmt->bind_param("i", $active_country_id);
+    $stmt = $conn->prepare("SELECT ledger_id, ledger_name FROM ledgers ORDER BY ledger_name ASC");
     $stmt->execute();
     $res = $stmt->get_result();
     while ($r = $res->fetch_assoc()) {
@@ -280,6 +278,7 @@ if (isset($_POST['add_ledger'])) {
             INSERT INTO ledgers (ledger_name, opening_balance, balance_type, group_id, country_id)
             VALUES (?, ?, ?, ?, ?)
         ");
+        // Keep country_id for data separation when viewing
         $stmt->bind_param("sdsii", $ledger_name, $opening_balance, $balance_type, $group_id, $active_country_id);
         $stmt->execute();
         $newId = $conn->insert_id;
@@ -314,14 +313,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_voucher'])) {
         exit;
     }
 
-    // Validate ledgers belong to active country
-    $ledger_check_stmt = $conn->prepare("SELECT COUNT(*) as count FROM ledgers WHERE ledger_id IN (?, ?) AND country_id = ?");
-    $ledger_check_stmt->bind_param("iii", $dr_ledger, $cr_ledger, $active_country_id);
+    // Validate ledgers exist (no country check needed - ledgers are global)
+    $ledger_check_stmt = $conn->prepare("SELECT COUNT(*) as count FROM ledgers WHERE ledger_id IN (?, ?)");
+    $ledger_check_stmt->bind_param("ii", $dr_ledger, $cr_ledger);
     $ledger_check_stmt->execute();
     $ledger_check = $ledger_check_stmt->get_result()->fetch_assoc();
     $ledger_check_stmt->close();
     if ($ledger_check['count'] != 2) {
-        header("Location: ?error=cross_country_posting");
+        header("Location: ?error=invalid_ledgers");
         exit;
     }
 
@@ -333,7 +332,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_voucher'])) {
         INSERT INTO vouchers (voucher_type, date, narration, currency_id, exchange_rate, country_id, created_at)
         VALUES (?, ?, ?, ?, ?, ?, NOW())
     ");
-    $stmt->bind_param("sssidii", $voucher_type, $date, $narration, $currency_id, $exchange_rate, $active_country_id);
+    $stmt->bind_param("sssidi", $voucher_type, $date, $narration, $currency_id, $exchange_rate, $active_country_id);
     $stmt->execute();
     $voucher_id = $conn->insert_id;
 
@@ -381,14 +380,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_voucher'])) {
         exit;
     }
 
-    // Validate ledgers belong to active country
-    $ledger_check_stmt = $conn->prepare("SELECT COUNT(*) as count FROM ledgers WHERE ledger_id IN (?, ?) AND country_id = ?");
-    $ledger_check_stmt->bind_param("iii", $dr_ledger, $cr_ledger, $active_country_id);
+    // Validate ledgers exist (no country check needed - ledgers are global)
+    $ledger_check_stmt = $conn->prepare("SELECT COUNT(*) as count FROM ledgers WHERE ledger_id IN (?, ?)");
+    $ledger_check_stmt->bind_param("ii", $dr_ledger, $cr_ledger);
     $ledger_check_stmt->execute();
     $ledger_check = $ledger_check_stmt->get_result()->fetch_assoc();
     $ledger_check_stmt->close();
     if ($ledger_check['count'] != 2) {
-        header("Location: ?error=cross_country_posting");
+        header("Location: ?error=invalid_ledgers");
         exit;
     }
 
@@ -569,17 +568,15 @@ if (isset($_POST['delete_voucher'])) {
 
 
 // ============================================================================
-// 8) FETCH DATA FOR FRONTEND TABLES (Filtered by Country)
+// 8) FETCH DATA FOR FRONTEND TABLES (Filtered by Country for Vouchers, Global for Ledgers)
 // ============================================================================
 
-// Fetch ledgers list (filtered)
+// Fetch ledgers list (global - not filtered by country)
 $ledgers_stmt = $conn->prepare("
     SELECT ledger_id, ledger_name
     FROM ledgers
-    WHERE country_id = ?
     ORDER BY ledger_name ASC
 ");
-$ledgers_stmt->bind_param("i", $active_country_id);
 $ledgers_stmt->execute();
 $ledgers = $ledgers_stmt->get_result();
 $ledgers_stmt->close();
@@ -601,13 +598,16 @@ $vouchers_stmt->execute();
 $vouchers = $vouchers_stmt->get_result();
 $vouchers_stmt->close();
 
-// Fetch ledger balances using Opening + Dr - Cr (filtered)
+// Fetch ledger balances using Opening + Dr - Cr (filtered) with group info
 $balances_stmt = $conn->prepare("
     SELECT 
         l.ledger_id,
         l.ledger_name,
         l.opening_balance,
         l.balance_type,
+        ag.group_name,
+        ag.group_type,
+        ag.sub_type,
 
         COALESCE(SUM(CASE WHEN ve.type='Dr' THEN ve.amount_lkr ELSE 0 END), 0) AS total_dr,
         COALESCE(SUM(CASE WHEN ve.type='Cr' THEN ve.amount_lkr ELSE 0 END), 0) AS total_cr,
@@ -621,10 +621,12 @@ $balances_stmt = $conn->prepare("
         ) AS net_balance
 
     FROM ledgers l
+    JOIN account_groups ag ON l.group_id = ag.group_id
     LEFT JOIN voucher_entries ve ON l.ledger_id = ve.ledger_id
     LEFT JOIN vouchers v ON ve.voucher_id = v.voucher_id
     WHERE l.country_id = ? AND (v.country_id = ? OR v.country_id IS NULL)
     GROUP BY l.ledger_id
+    ORDER BY ag.group_type, ag.sub_type, l.ledger_name
 ");
 $balances_stmt->bind_param("ii", $active_country_id, $active_country_id);
 $balances_stmt->execute();

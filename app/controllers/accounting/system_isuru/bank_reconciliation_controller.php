@@ -18,7 +18,7 @@ if ($conn->connect_error) {
 $conn->set_charset('utf8mb4');
 
 // ============================================================================
-// COUNTRY SELECTION HANDLING
+// COUNTRY SELECTION HANDLING (Removed - now shows consolidated data)
 // ============================================================================
 if (!isset($_SESSION['country_id'])) {
     $default_country = $conn->query("SELECT id FROM countries ORDER BY id ASC LIMIT 1")->fetch_assoc();

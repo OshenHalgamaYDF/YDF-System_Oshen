@@ -92,7 +92,6 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\system_isur
             <button type="button" class="alert-close-left" aria-label="Close"><i class="fas fa-times"></i></button>
             ❌ Error:
             <?php
-            // Map known error codes to friendly messages
             switch($_GET['error']) {
                 case 'invalid_input': echo 'Invalid input data'; break;
                 case 'bad_id': echo 'Invalid voucher ID'; break;
@@ -109,12 +108,7 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\system_isur
         </div>
     <?php endif; ?>
 
-    <!-- ==========================
-         All Vouchers table
-         - Displays vouchers fetched by the controller ($vouchers)
-         - DataTables is initialized in the script section to add sorting/search/pagination
-         - We render entries HTML (prepared by controller) in the "Entries" cell
-         ========================== -->
+    <!-- All Vouchers table -->
     <div class="card mb-4">
         <div class="card-header bg-dark text-white">All Vouchers</div>
         <div class="card-body table-responsive">
@@ -126,68 +120,44 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\system_isur
                     <?php if ($vouchers && $vouchers->num_rows > 0): ?>
                         <?php while ($v = $vouchers->fetch_assoc()): ?>
                             <tr>
-                                <!-- voucher id, type and date are escaped as needed -->
                                 <td><?= intval($v['voucher_id']); ?></td>
                                 <td><?= htmlspecialchars($v['voucher_type']); ?></td>
                                 <td><?= htmlspecialchars($v['date']); ?></td>
-
-                                <!-- entries column may contain formatted HTML (e.g. ledger lines) prepared by controller -->
-                                <td class="text-start"><?= $v['entries']; // entries contain HTML <br> ?></td>
+                                <td class="text-start"><?= $v['entries']; ?></td>
                                 <td class="text-start"><?= htmlspecialchars($v['narration']); ?></td>
-
-                                <!-- action buttons: edit opens modal, delete triggers confirmation -->
                                 <td>
                                     <button class="btn btn-sm btn-warning edit-btn" data-id="<?= intval($v['voucher_id']); ?>" title="Edit">
                                         <i class="fas fa-edit"></i>
                                     </button>
-
                                     <button class="btn btn-sm btn-danger delete-btn" data-id="<?= intval($v['voucher_id']); ?>" title="Delete">
                                         <i class="fas fa-trash-alt"></i>
                                     </button>
                                 </td>
                             </tr>
                         <?php endwhile; ?>
-                    <?php else: ?>
-                        <tr><td colspan="6" class="text-muted">No vouchers found</td></tr>
                     <?php endif; ?>
                 </tbody>
             </table>
         </div>
     </div>
 
-    <!-- ==========================
-         Ledger Balances table
-         - Shows opening balances, totals and computed net balance per ledger
-         - Controller provides $balances with computed fields
-         - Also enhanced by DataTables for search/sort/pagination
-         ========================== -->
+    <!-- Account Balances -->
     <div class="card mb-4">
-        <div class="card-header bg-success text-white">Ledger Balances</div>
+        <div class="card-header bg-success text-white">Account Balances</div>
         <div class="card-body table-responsive">
-            <table id="balancesTable" class="table table-bordered table-hover">
+            <table class="table table-bordered table-striped">
                 <thead class="table-success">
-                    <tr><th>Ledger</th><th>Opening</th><th>Total Dr</th><th>Total Cr</th><th>Balance</th></tr>
+                    <tr><th>Ledger</th><th>Opening Balance</th><th>Closing Balance</th></tr>
                 </thead>
                 <tbody>
                     <?php if ($balances && $balances->num_rows > 0): ?>
-                        <?php while ($b = $balances->fetch_assoc()): 
-                            // the controller should provide net_balance and opening_balance and balance_type
-                            $net_balance = $b['net_balance'];
-                            $balance_type = $net_balance >= 0 ? 'Dr' : 'Cr';
-                            $balance_amount = abs($net_balance);
-                        ?>
+                        <?php while ($b = $balances->fetch_assoc()): ?>
                             <tr>
-                                <td class="text-start"><?= htmlspecialchars($b['ledger_name']); ?></td>
+                                <td><?= htmlspecialchars($b['ledger_name']); ?></td>
                                 <td><?= htmlspecialchars($b['balance_type']) . " " . number_format($b['opening_balance'], 2); ?></td>
-                                <td class="text-success"><?= number_format($b['total_dr'], 2); ?></td>
-                                <td class="text-danger"><?= number_format($b['total_cr'], 2); ?></td>
-                                <td class="fw-bold <?= $net_balance >= 0 ? 'text-success' : 'text-danger' ?>">
-                                    <?= $balance_type . ' ' . number_format($balance_amount, 2); ?>
-                                </td>
+                                <td><?= ($b['net_balance'] >= 0 ? 'Dr ' : 'Cr ') . number_format(abs($b['net_balance']), 2); ?></td>
                             </tr>
                         <?php endwhile; ?>
-                    <?php else: ?>
-                        <tr><td colspan="5" class="text-muted">No ledger balances found</td></tr>
                     <?php endif; ?>
                 </tbody>
             </table>
@@ -196,7 +166,7 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\system_isur
 </div>
 
 <!-- ==========================
-     Modal: Edit Voucher
+     Modal: Edit Voucher 
      - Content is loaded via AJAX when user clicks Edit
      - Form posts back with name="update_voucher" (JS appends this) so controller can detect update
      ========================== -->
@@ -284,8 +254,7 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\system_isur
                  <select name="dr_ledger" id="drLedgerSelect" class="form-select" required>
                     <option value="">-- Select --</option>
                     <?php
-                    $ledgersDr = $conn->prepare("SELECT ledger_id, ledger_name FROM ledgers WHERE country_id = ? ORDER BY ledger_name ASC");
-                    $ledgersDr->bind_param("i", $active_country_id);
+                    $ledgersDr = $conn->prepare("SELECT ledger_id, ledger_name FROM ledgers ORDER BY ledger_name ASC");
                     $ledgersDr->execute();
                     $resDr = $ledgersDr->get_result();
                     while ($l = $resDr->fetch_assoc()) {
@@ -300,8 +269,7 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\system_isur
                    <select name="cr_ledger" id="crLedgerSelect" class="form-select" required>
                       <option value="">-- Select --</option>
                       <?php
-                      $ledgersCr = $conn->prepare("SELECT ledger_id, ledger_name FROM ledgers WHERE country_id = ? ORDER BY ledger_name ASC");
-                      $ledgersCr->bind_param("i", $active_country_id);
+                      $ledgersCr = $conn->prepare("SELECT ledger_id, ledger_name FROM ledgers ORDER BY ledger_name ASC");
                       $ledgersCr->execute();
                       $resCr = $ledgersCr->get_result();
                       while ($l = $resCr->fetch_assoc()) {
@@ -331,8 +299,7 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\system_isur
             <select name="group_id" class="form-select mb-2" required>
                 <option value="">-- Select Account Group --</option>
                 <?php
-              $groups = $conn->prepare("SELECT group_id, group_name, group_type FROM account_groups WHERE country_id = ? ORDER BY group_name ASC");
-              $groups->bind_param("i", $active_country_id);
+              $groups = $conn->prepare("SELECT group_id, group_name, group_type FROM account_groups ORDER BY group_name ASC");
               $groups->execute();
               $resGroups = $groups->get_result();
               while ($g = $resGroups->fetch_assoc()) {
@@ -578,15 +545,13 @@ document.addEventListener('DOMContentLoaded', function() {
             columnDefs: [
                 // Entries column (3) and Actions column (5) should not be orderable
                 { orderable: false, targets: [3,5] }
-            ]
+            ],
+            language: {
+                emptyTable: "No vouchers found for this country."
+            }
         });
 
-        // balancesTable: sorted by ledger name by default
-        $('#balancesTable').DataTable({
-            order: [[0, 'asc']],
-            pageLength: 10,
-            responsive: true
-        });
+        // balancesTable: removed since now categorized into multiple tables
     }
 
     // Global click listener to capture Edit and Delete button clicks inside table rows

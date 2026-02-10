@@ -46,7 +46,7 @@ $toEsc   = $conn->real_escape_string($filter_to);
 $dateExpr = "v.date >= '{$fromEsc}' AND v.date <= '{$toEsc}'";
 
 // =====================
-// 1️⃣ Query all ledgers + their group type + totals (date filtered and country filtered)
+// 1️⃣ Query all ledgers + their group type + totals (date filtered - GLOBAL, not country filtered)
 // =====================
 $query = "
     SELECT 
@@ -61,15 +61,12 @@ $query = "
     LEFT JOIN vouchers v ON ve.voucher_id = v.voucher_id
     LEFT JOIN account_groups g ON g.group_id = l.group_id
     WHERE g.group_type IN ('Income', 'Expense')
-      AND l.country_id = ?
-      AND v.country_id = ?
       AND $dateExpr
     GROUP BY l.ledger_id, l.ledger_name, g.group_name, g.group_type
     ORDER BY g.group_type, l.ledger_name
 ";
 
 $stmt = $conn->prepare($query);
-$stmt->bind_param("ii", $active_country_id, $active_country_id);
 $stmt->execute();
 $result = $stmt->get_result();
 

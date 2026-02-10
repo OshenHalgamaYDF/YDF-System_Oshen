@@ -78,6 +78,8 @@ if ($ledgerIdParam && isset($_GET['export']) && $_GET['export'] === 'excel') {
         ORDER BY v.date ASC, v.voucher_id ASC
     ");
     $tstmt->bind_param("issi", $id, $filter_from, $filter_to, $active_country_id);
+    $tstmt->execute();
+    $q = $tstmt->get_result();
     $safeName = preg_replace('/[^a-z0-9_\-]/i','_', $ledger_name ?: 'ledger_'.$id);
     $filename = "ledger_{$safeName}_" . $filter_from . "_to_" . $filter_to . ".csv";
     header('Content-Disposition: attachment; filename="'.$filename.'"');
@@ -139,12 +141,12 @@ if ($ledgerIdParam) {
         exit;
     }
 
-    $stmtL = $conn->prepare("SELECT ledger_name, opening_balance, balance_type FROM ledgers WHERE ledger_id = ? LIMIT 1");
-    $stmtL->bind_param("i", $id);
+    $stmtL = $conn->prepare("SELECT ledger_name, opening_balance, balance_type FROM ledgers WHERE ledger_id = ? AND country_id = ? LIMIT 1");
+    $stmtL->bind_param("ii", $id, $active_country_id);
     $stmtL->execute();
     $resL = $stmtL->get_result();
     if (!$resL || $resL->num_rows === 0) {
-        echo "<div class='alert alert-warning'>Ledger not found.</div>";
+        echo "<div class='alert alert-warning'>Ledger not found or access denied.</div>";
         $stmtL->close();
         exit;
     }
@@ -167,6 +169,8 @@ if ($ledgerIdParam) {
         exit;
     }
     $tstmt->bind_param("issi", $id, $filter_from, $filter_to, $active_country_id);
+    $tstmt->execute();
+    $q = $tstmt->get_result();
     $totalDr = 0.0;
     $totalCr = 0.0;
 
