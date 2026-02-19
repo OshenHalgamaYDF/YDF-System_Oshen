@@ -15,14 +15,17 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\system_isur
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <!-- Roboto font for nicer typography -->
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
-
+    <!-- Chart.js for profit graph -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <!-- Date Range Picker CSS -->
+    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css" />
     <!-- DataTables CSS (Bootstrap 5 integration) for searchable/sortable tables -->
     <link href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css" rel="stylesheet">
 
     <style>
         /* Basic page styling */
         body { background: #f8f9fa; font-family: 'Roboto', sans-serif; }
-        .container { max-width: 1000px; margin-top: 40px; }
+        .container { max-width: 1200px; margin-top: 40px; }
         .card { box-shadow: 0 0 10px rgba(0,0,0,0.1); }
         h2 { color: #0d6efd; font-weight: 700; text-align: center; margin-bottom: 20px; }
         table th, table td { text-align: center; vertical-align: middle; }
@@ -33,6 +36,12 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\system_isur
         /* Left-positioned close button for alerts (keeps it on the left side) */
         .alert .alert-close-left { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); border: none; background: transparent; color: inherit; font-size: 1.05rem; padding: 2px 6px; cursor: pointer; }
         .alert.fade-out { opacity: 0; max-height: 0; padding-top: 0; padding-bottom: 0; margin-bottom: 0; overflow: hidden; }
+        /* Graph container styling */
+        .graph-container { height: 400px; margin-bottom: 20px; }
+        /* Date range picker styling */
+        .daterange-container { display: flex; gap: 10px; align-items: center; }
+        .daterange-btn { cursor: pointer; background-color: #141414; border: 1px solid #ced4da; border-radius: 0.375rem; padding: 0.375rem 0.75rem; }
+        .daterange-btn:hover { background-color: #6e757c; }
     </style>
 </head>
 <body>
@@ -108,6 +117,81 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\system_isur
         </div>
     <?php endif; ?>
 
+    <!-- Cash Profit Graph Section with Date Range Selector -->
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+            <div>
+                <i class="fas fa-chart-line me-2"></i>Cash Profit Analysis
+            </div>
+            <div class="daterange-container">
+                <i class="fas fa-calendar-alt me-2"></i>
+                <div id="reportrange" class="daterange-btn">
+                    <i class="fa fa-calendar"></i>
+                    <span></span> <i class="fa fa-caret-down"></i>
+                </div>
+                <button id="refreshChartBtn" class="btn btn-sm btn-light">
+                    <i class="fas fa-sync-alt"></i> Refresh
+                </button>
+            </div>
+        </div>
+        <div class="card-body">
+            <!-- Loading indicator -->
+            <div id="chartLoading" class="text-center py-5" style="display: none;">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-2">Loading chart data...</p>
+            </div>
+            
+            <!-- Chart container -->
+            <div class="graph-container" id="chartContainer">
+                <canvas id="cashProfitChart"></canvas>
+            </div>
+            
+            <!-- Summary Cards -->
+            <div class="row mt-4 text-center">
+                <div class="col-md-3">
+                    <div class="border rounded p-3 bg-light">
+                        <small class="text-muted">Period Start</small>
+                        <h6 id="periodStart" class="mb-0">-</h6>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="border rounded p-3 bg-light">
+                        <small class="text-muted">Period End</small>
+                        <h6 id="periodEnd" class="mb-0">-</h6>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div class="border rounded p-3 bg-light">
+                        <small class="text-muted">Days</small>
+                        <h6 id="periodDays" class="mb-0">-</h6>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div class="border rounded p-3 bg-success text-white">
+                        <small>Total Cash In</small>
+                        <h5 id="totalCashIn" class="mb-0">0.00</h5>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div class="border rounded p-3 bg-danger text-white">
+                        <small>Total Cash Out</small>
+                        <h5 id="totalCashOut" class="mb-0">0.00</h5>
+                    </div>
+                </div>
+            </div>
+            <div class="row mt-2 text-center">
+                <div class="col-md-4 offset-md-4">
+                    <div class="border rounded p-3 bg-primary text-white">
+                        <small>Net Cash Profit</small>
+                        <h4 id="netCashProfit" class="mb-0">0.00</h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- All Vouchers table -->
     <div class="card mb-4">
         <div class="card-header bg-dark text-white">All Vouchers</div>
@@ -133,29 +217,6 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\system_isur
                                         <i class="fas fa-trash-alt"></i>
                                     </button>
                                 </td>
-                            </tr>
-                        <?php endwhile; ?>
-                    <?php endif; ?>
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-    <!-- Account Balances -->
-    <div class="card mb-4">
-        <div class="card-header bg-success text-white">Account Balances</div>
-        <div class="card-body table-responsive">
-            <table class="table table-bordered table-striped">
-                <thead class="table-success">
-                    <tr><th>Ledger</th><th>Opening Balance</th><th>Closing Balance</th></tr>
-                </thead>
-                <tbody>
-                    <?php if ($balances && $balances->num_rows > 0): ?>
-                        <?php while ($b = $balances->fetch_assoc()): ?>
-                            <tr>
-                                <td><?= htmlspecialchars($b['ledger_name']); ?></td>
-                                <td><?= htmlspecialchars($b['balance_type']) . " " . number_format($b['opening_balance'], 2); ?></td>
-                                <td><?= ($b['net_balance'] >= 0 ? 'Dr ' : 'Cr ') . number_format(abs($b['net_balance']), 2); ?></td>
                             </tr>
                         <?php endwhile; ?>
                     <?php endif; ?>
@@ -489,13 +550,16 @@ dateInput.addEventListener('change', () => { updateConversion().catch(console.er
 </script>
 
 <!-- ==========================
-     Scripts: Bootstrap, jQuery, DataTables, SweetAlert
+     Scripts: Bootstrap, jQuery, DataTables, SweetAlert, DateRangePicker
      - DOM-ready JS initializes DataTables and handles edit/delete via AJAX/fetch
-     - Inline comments explain important logic
      ========================== -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-<!-- jQuery (required by DataTables) -->
+<!-- jQuery (required by DataTables and DateRangePicker) -->
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<!-- Moment.js (required by DateRangePicker) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/moment.min.js"></script>
+<!-- Date Range Picker JS -->
+<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
 <!-- DataTables core + Bootstrap integration -->
 <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
@@ -535,6 +599,167 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     })();
+
+    // Initialize DateRangePicker
+    let startDate = moment().subtract(6, 'days');
+    let endDate = moment();
+    
+    function updateDateRangeDisplay(start, end) {
+        $('#reportrange span').html(start.format('MMMM D, YYYY') + ' - ' + end.format('MMMM D, YYYY'));
+        document.getElementById('periodStart').textContent = start.format('YYYY-MM-DD');
+        document.getElementById('periodEnd').textContent = end.format('YYYY-MM-DD');
+        document.getElementById('periodDays').textContent = end.diff(start, 'days') + 1 + ' days';
+    }
+    
+    $('#reportrange').daterangepicker({
+        startDate: startDate,
+        endDate: endDate,
+        ranges: {
+           'Today': [moment(), moment()],
+           'Yesterday': [moment().subtract(1, 'days'), moment().subtract(1, 'days')],
+           'Last 7 Days': [moment().subtract(6, 'days'), moment()],
+           'Last 30 Days': [moment().subtract(29, 'days'), moment()],
+           'This Month': [moment().startOf('month'), moment().endOf('month')],
+           'Last Month': [moment().subtract(1, 'month').startOf('month'), moment().subtract(1, 'month').endOf('month')],
+           'Last 3 Months': [moment().subtract(3, 'months').startOf('month'), moment().endOf('month')],
+           'Last 6 Months': [moment().subtract(6, 'months').startOf('month'), moment().endOf('month')],
+           'This Year': [moment().startOf('year'), moment().endOf('year')],
+           'Last Year': [moment().subtract(1, 'year').startOf('year'), moment().subtract(1, 'year').endOf('year')]
+        }
+    }, function(start, end, label) {
+        updateDateRangeDisplay(start, end);
+        loadCashProfitData(start.format('YYYY-MM-DD'), end.format('YYYY-MM-DD'));
+    });
+    
+    updateDateRangeDisplay(startDate, endDate);
+
+    // Fetch cash profit data for the graph with date range
+    function loadCashProfitData(startDate = null, endDate = null) {
+        // Show loading indicator
+        document.getElementById('chartLoading').style.display = 'block';
+        document.getElementById('chartContainer').style.opacity = '0.5';
+        
+        let url = window.location.pathname + '?action=get_cash_profit';
+        if (startDate && endDate) {
+            url += '&start_date=' + encodeURIComponent(startDate) + '&end_date=' + encodeURIComponent(endDate);
+        }
+        
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                // Hide loading indicator
+                document.getElementById('chartLoading').style.display = 'none';
+                document.getElementById('chartContainer').style.opacity = '1';
+                
+                if (data.success) {
+                    // Update summary numbers
+                    document.getElementById('totalCashIn').textContent = data.totals.total_in.toFixed(2) + ' <?= htmlspecialchars($active_country['currency_code']) ?>';
+                    document.getElementById('totalCashOut').textContent = data.totals.total_out.toFixed(2) + ' <?= htmlspecialchars($active_country['currency_code']) ?>';
+                    document.getElementById('netCashProfit').textContent = data.totals.net_profit.toFixed(2) + ' <?= htmlspecialchars($active_country['currency_code']) ?>';
+                    
+                    // Create/update chart
+                    const ctx = document.getElementById('cashProfitChart').getContext('2d');
+                    
+                    // Destroy existing chart if it exists
+                    if (window.cashProfitChart instanceof Chart) {
+                        window.cashProfitChart.destroy();
+                    }
+                    
+                    window.cashProfitChart = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: data.labels,
+                            datasets: [
+                                {
+                                    label: 'Cash In (Receipts)',
+                                    data: data.cashIn,
+                                    borderColor: 'rgb(40, 167, 69)',
+                                    backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                                    tension: 0.1,
+                                    fill: true,
+                                    pointBackgroundColor: 'rgb(40, 167, 69)'
+                                },
+                                {
+                                    label: 'Cash Out (Payments)',
+                                    data: data.cashOut,
+                                    borderColor: 'rgb(220, 53, 69)',
+                                    backgroundColor: 'rgba(220, 53, 69, 0.1)',
+                                    tension: 0.1,
+                                    fill: true,
+                                    pointBackgroundColor: 'rgb(220, 53, 69)'
+                                },
+                                {
+                                    label: 'Net Profit',
+                                    data: data.netProfit,
+                                    borderColor: 'rgb(13, 110, 253)',
+                                    backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                                    borderWidth: 3,
+                                    tension: 0.1,
+                                    fill: false,
+                                    pointBackgroundColor: 'rgb(13, 110, 253)'
+                                }
+                            ]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: {
+                                    position: 'top',
+                                },
+                                title: {
+                                    display: false
+                                },
+                                tooltip: {
+                                    mode: 'index',
+                                    intersect: false,
+                                    callbacks: {
+                                        label: function(context) {
+                                            let label = context.dataset.label || '';
+                                            if (label) {
+                                                label += ': ';
+                                            }
+                                            if (context.parsed.y !== null) {
+                                                label += context.parsed.y.toFixed(2) + ' <?= htmlspecialchars($active_country['currency_code']) ?>';
+                                            }
+                                            return label;
+                                        }
+                                    }
+                                }
+                            },
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    ticks: {
+                                        callback: function(value, index, values) {
+                                            return value.toFixed(2) + ' <?= htmlspecialchars($active_country['currency_code']) ?>';
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                } else {
+                    console.error('Failed to load cash profit data');
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: 'Failed to load chart data: ' + (data.message || 'Unknown error')
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('Error loading cash profit data:', error);
+                document.getElementById('chartLoading').style.display = 'none';
+                document.getElementById('chartContainer').style.opacity = '1';
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Network Error',
+                    text: 'Failed to load chart data. Please try again.'
+                });
+            });
+    }
+
     // Initialize DataTables if available
     // vouchersTable: sort by Date (column index 2) descending so newest vouchers appear on top
     if (typeof jQuery !== 'undefined' && $.fn.dataTable) {
@@ -550,9 +775,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 emptyTable: "No vouchers found for this country."
             }
         });
-
-        // balancesTable: removed since now categorized into multiple tables
     }
+
+    // Load initial cash profit data
+    loadCashProfitData(startDate.format('YYYY-MM-DD'), endDate.format('YYYY-MM-DD'));
+
+    // Refresh button handler
+    document.getElementById('refreshChartBtn').addEventListener('click', function() {
+        const range = $('#reportrange').data('daterangepicker');
+        loadCashProfitData(range.startDate.format('YYYY-MM-DD'), range.endDate.format('YYYY-MM-DD'));
+    });
 
     // Global click listener to capture Edit and Delete button clicks inside table rows
     document.addEventListener('click', function(e) {

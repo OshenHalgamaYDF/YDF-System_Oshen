@@ -632,7 +632,7 @@ $balances_stmt->bind_param("ii", $active_country_id, $active_country_id);
 $balances_stmt->execute();
 $balances = $balances_stmt->get_result();
 $balances_stmt->close();
-
+;
 // ============================================================================
 // 9) GET EXCHANGE RATE (AJAX)
 // ============================================================================
@@ -647,5 +647,108 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_rate' && isset($_GET['cod
     $stmt->execute();
     $r = $stmt->get_result()->fetch_assoc();
     echo json_encode(['rate' => $r['rate_to_lkr'] ?? null]);
+    exit;
+}
+// ============================================================================
+// 10) GET CASH PROFIT DATA FOR GRAPH (WITH DATE RANGE SUPPORT)
+// ============================================================================
+if (isset($_GET['action']) && $_GET['action'] === 'get_cash_profit') {
+    
+    // Get date range from request, default to last 7 days
+    $start_date = isset($_GET['start_date']) ? $_GET['start_date'] : date('Y-m-d', strtotime('-6 days'));
+    $end_date = isset($_GET['end_date']) ? $_GET['end_date'] : date('Y-m-d');
+    
+    // Validate dates
+    if (!strtotime($start_date) || !strtotime($end_date)) {
+        header('Content-Type: application/json');
+        echo json_encode(['success' => false, 'message' => 'Invalid date format']);
+        exit;
+    }
+    
+    // Get cash transactions (Payment and Receipt vouchers) within date range
+    $stmt = $conn->prepare("
+        SELECT 
+            DATE(v.date) as trans_date,
+            v.voucher_type,
+            SUM(ve.amount_lkr) as total_amount
+        FROM vouchers v
+        JOIN voucher_entries ve ON v.voucher_id = ve.voucher_id
+        WHERE v.country_id = ?
+            AND v.voucher_type IN ('Payment', 'Receipt')
+            AND v.date BETWEEN ? AND ?
+        GROUP BY DATE(v.date), v.voucher_type
+        ORDER BY v.date ASC
+    ");
+    
+    $stmt->bind_param("iss", $active_country_id, $start_date, $end_date);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    // Calculate date range
+    $start = new DateTime($start_date);
+    $end = new DateTime($end_date);
+    $interval = new DateInterval('P1D');
+    $dateRange = new DatePeriod($start, $interval, $end->modify('+1 day'));
+    
+    // Initialize arrays
+    $dates = [];
+    $cashIn = [];
+    $cashOut = [];
+    $netProfit = [];
+    $totals = ['total_in' => 0, 'total_out' => 0, 'net_profit' => 0];
+    
+    // Initialize daily totals
+    foreach ($dateRange as $date) {
+        $dateKey = $date->format('Y-m-d');
+        $dates[] = $date->format('M d');
+        $cashIn[$dateKey] = 0;
+        $cashOut[$dateKey] = 0;
+    }
+    
+    // Fill in actual data
+    while ($row = $result->fetch_assoc()) {
+        $date = $row['trans_date'];
+        if (array_key_exists($date, $cashIn)) {
+            if ($row['voucher_type'] === 'Receipt') {
+                $cashIn[$date] = floatval($row['total_amount']);
+                $totals['total_in'] += floatval($row['total_amount']);
+            } else if ($row['voucher_type'] === 'Payment') {
+                $cashOut[$date] = floatval($row['total_amount']);
+                $totals['total_out'] += floatval($row['total_amount']);
+            }
+        }
+    }
+    
+    // Prepare final arrays
+    $cashInValues = [];
+    $cashOutValues = [];
+    $netProfitValues = [];
+    
+    foreach ($dateRange as $date) {
+        $dateKey = $date->format('Y-m-d');
+        $inValue = $cashIn[$dateKey] ?? 0;
+        $outValue = $cashOut[$dateKey] ?? 0;
+        
+        $cashInValues[] = $inValue;
+        $cashOutValues[] = $outValue;
+        $netValue = $inValue - $outValue;
+        $netProfitValues[] = $netValue;
+    }
+    
+    $totals['net_profit'] = $totals['total_in'] - $totals['total_out'];
+    
+    header('Content-Type: application/json');
+    echo json_encode([
+        'success' => true,
+        'labels' => $dates,
+        'cashIn' => $cashInValues,
+        'cashOut' => $cashOutValues,
+        'netProfit' => $netProfitValues,
+        'totals' => $totals,
+        'date_range' => [
+            'start' => $start_date,
+            'end' => $end_date
+        ]
+    ]);
     exit;
 }
