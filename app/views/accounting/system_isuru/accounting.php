@@ -50,11 +50,12 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\system_isur
     <!-- Page heading -->
     <h2>YDF Accounting System - <?= htmlspecialchars($active_country['country_name']) ?> (<?= htmlspecialchars($active_country['currency_code']) ?>)</h2>
 
-    <!-- Country Selector -->
+    <!-- Country Selector with All Countries option -->
     <div class="mb-4">
         <form method="POST" class="d-inline">
             <label for="countrySelect" class="form-label">Select Country:</label>
             <select name="country_id" id="countrySelect" class="form-select d-inline w-auto" onchange="this.form.submit()">
+                <option value="0" <?= ($active_country_id == 0) ? 'selected' : '' ?>>🌍 All Countries</option>
                 <?php
                 $countries = $conn->query("SELECT id, country_name FROM countries ORDER BY country_name ASC");
                 while ($c = $countries->fetch_assoc()) {
@@ -191,38 +192,41 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\system_isur
             </div>
         </div>
     </div>
-
-    <!-- All Vouchers table -->
-    <div class="card mb-4">
-        <div class="card-header bg-dark text-white">All Vouchers</div>
-        <div class="card-body table-responsive">
-            <table id="vouchersTable" class="table table-bordered table-striped">
-                <thead class="table-dark">
-                    <tr><th>ID</th><th>Type</th><th>Date</th><th>Entries</th><th>Narration</th><th>Actions</th></tr>
-                </thead>
-                <tbody>
-                    <?php if ($vouchers && $vouchers->num_rows > 0): ?>
-                        <?php while ($v = $vouchers->fetch_assoc()): ?>
-                            <tr>
-                                <td><?= intval($v['voucher_id']); ?></td>
-                                <td><?= htmlspecialchars($v['voucher_type']); ?></td>
-                                <td><?= htmlspecialchars($v['date']); ?></td>
-                                <td class="text-start"><?= $v['entries']; ?></td>
-                                <td class="text-start"><?= htmlspecialchars($v['narration']); ?></td>
-                                <td>
-                                    <button class="btn btn-sm btn-warning edit-btn" data-id="<?= intval($v['voucher_id']); ?>" title="Edit">
-                                        <i class="fas fa-edit"></i>
-                                    </button>
-                                    <button class="btn btn-sm btn-danger delete-btn" data-id="<?= intval($v['voucher_id']); ?>" title="Delete">
-                                        <i class="fas fa-trash-alt"></i>
-                                    </button>
-                                </td>
-                            </tr>
-                        <?php endwhile; ?>
-                    <?php endif; ?>
-                </tbody>
-            </table>
-        </div>
+<!-- All Vouchers table -->
+<div class="card mb-4">
+    <div class="card-header bg-dark text-white">All Vouchers</div>
+    <div class="card-body table-responsive">
+        <table id="vouchersTable" class="table table-bordered table-striped">
+            <thead class="table-dark">
+                <tr><th>ID</th><th>Type</th><th>Date</th><th>Entries</th><th>Narration</th><th>Actions</th></tr>
+            </thead>
+            <tbody>
+                <?php if ($vouchers && $vouchers->num_rows > 0): ?>
+                    <?php while ($v = $vouchers->fetch_assoc()): ?>
+                        <tr>
+                            <td><?= intval($v['voucher_id']); ?></td>
+                            <td><?= htmlspecialchars($v['voucher_type']); ?></td>
+                            <td><?= htmlspecialchars($v['date']); ?></td>
+                            <td class="text-start">
+                                <?= $v['entries']; ?>
+                                <?php if (isset($v['country_name']) && $v['country_name'] == 'All Countries'): ?>
+                                    <br><span class="badge bg-info mt-1">🌍 Global</span>
+                                <?php endif; ?>
+                            </td>
+                            <td class="text-start"><?= htmlspecialchars($v['narration']); ?></td>
+                            <td>
+                                <button class="btn btn-sm btn-warning edit-btn" data-id="<?= intval($v['voucher_id']); ?>" title="Edit">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button class="btn btn-sm btn-danger delete-btn" data-id="<?= intval($v['voucher_id']); ?>" title="Delete">
+                                    <i class="fas fa-trash-alt"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    <?php endwhile; ?>
+                <?php endif; ?>
+            </tbody>
+        </table>
     </div>
 </div>
 
