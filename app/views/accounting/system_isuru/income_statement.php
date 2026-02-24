@@ -7,15 +7,17 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\system_isur
     <meta charset="utf-8">
     <title>Income Statement</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     <style>
         @media print { .no-print { display:none !important; } }
+        .country-badge { font-size: 0.8rem; background-color: #e9ecef; padding: 2px 6px; border-radius: 4px; margin-left: 5px; }
     </style>
 </head>
 <body class="p-4 bg-light">
 <div class="container mb-4">
     <div class="card shadow-lg">
         <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
-            <h5 class="mb-0">📈 Income Statement - Consolidated (All Countries)</h5>
+            <h5 class="mb-0">📈 Income Statement - <?= htmlspecialchars($active_country['country_name']) ?> (<?= htmlspecialchars($active_country['currency_code']) ?>)</h5>
             <div class="d-flex gap-2">
                 <?php
                 $qs = [
@@ -27,6 +29,37 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\system_isur
                 <a href="?<?= http_build_query($qs) ?>" class="btn btn-success btn-sm">Download Excel</a>
                 <a href="accounting.php" class="btn btn-secondary btn-sm">← Back</a>
             </div>
+        </div>
+
+        <!-- Country Selector with All Countries option - FIXED -->
+        <div class="card-header bg-light no-print">
+            <form method="POST" class="row g-2 align-items-end" action="<?= htmlspecialchars($_SERVER['PHP_SELF']); ?>">
+                <div class="col-md-3">
+                    <label for="countrySelect" class="form-label fw-bold">Select Country:</label>
+                    <select name="country_id" id="countrySelect" class="form-select" onchange="this.form.submit()">
+                        <option value="0" <?= ($active_country_id == 0) ? 'selected' : '' ?>>🌍 All Countries</option>
+                        <?php
+                        $countries = $conn->query("SELECT id, country_name FROM countries ORDER BY country_name ASC");
+                        while ($c = $countries->fetch_assoc()) {
+                            $sel = ($c['id'] == $active_country_id) ? 'selected' : '';
+                            echo "<option value='{$c['id']}' $sel>{$c['country_name']}</option>";
+                        }
+                        ?>
+                    </select>
+                    <input type="hidden" name="select_country" value="1">
+                    
+                    <!-- Preserve existing GET parameters -->
+                    <?php if (isset($_GET['filter_from'])): ?>
+                        <input type="hidden" name="filter_from" value="<?= htmlspecialchars($_GET['filter_from']) ?>">
+                    <?php endif; ?>
+                    <?php if (isset($_GET['filter_to'])): ?>
+                        <input type="hidden" name="filter_to" value="<?= htmlspecialchars($_GET['filter_to']) ?>">
+                    <?php endif; ?>
+                </div>
+                <div class="col-auto">
+                    <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-arrow-repeat"></i> Switch Country</button>
+                </div>
+            </form>
         </div>
 
         <!-- Date Range Filter (styled like Trial Balance) -->
@@ -60,19 +93,22 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\system_isur
                 <thead class="table-dark">
                     <tr>
                         <th style="width:60%">Account</th>
-                        <th class="text-end">Amount (Rs.)</th>
+                        <th class="text-end">Amount (<?= htmlspecialchars($active_country['currency_code']) ?>)</th>
                     </tr>
                 </thead>
                 <tbody>
                     <tr class="table-secondary fw-bold"><td colspan="2">INCOME</td></tr>
                     <?php
                     $showIncome = false;
+                    $showCountry = ($active_country_id == 0); // Show country badges only in All Countries view
+                    
                     foreach ($accounts as $acc) {
                         if ($acc['group_type'] === 'Income') {
                             $amount = $acc['total_cr'] - $acc['total_dr'];
                             if ($amount != 0) {
                                 $showIncome = true;
-                                echo "<tr><td class='ps-4'>{$acc['ledger_name']}</td><td class='text-end'>" . number_format($amount, 2) . "</td></tr>";
+                                $country_html = $showCountry && isset($acc['country_name']) ? " <span class='country-badge'>{$acc['country_name']}</span>" : '';
+                                echo "<tr><td class='ps-4'>{$acc['ledger_name']}{$country_html}</td><td class='text-end'>" . number_format($amount, 2) . "</td></tr>";
                             }
                         }
                     }
@@ -89,7 +125,8 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\system_isur
                             $amount = $acc['total_dr'] - $acc['total_cr'];
                             if ($amount != 0) {
                                 $showExpense = true;
-                                echo "<tr><td class='ps-4'>{$acc['ledger_name']}</td><td class='text-end'>" . number_format($amount, 2) . "</td></tr>";
+                                $country_html = $showCountry && isset($acc['country_name']) ? " <span class='country-badge'>{$acc['country_name']}</span>" : '';
+                                echo "<tr><td class='ps-4'>{$acc['ledger_name']}{$country_html}</td><td class='text-end'>" . number_format($amount, 2) . "</td></tr>";
                             }
                         }
                     }
@@ -102,10 +139,46 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\system_isur
                         <td class="text-end">Net Income (Loss)</td>
                         <td class="text-end <?= $net_income >= 0 ? 'text-success' : 'text-danger' ?>"><?= number_format($net_income,2) ?></td>
                     </tr>
+                    
+                    <!-- Show country breakdown if All Countries selected -->
+                    <?php if ($active_country_id == 0 && !empty($country_totals)): ?>
+                    <tr><td colspan="2"><hr></td></tr>
+                    <tr class="table-info fw-bold"><td colspan="2">SUMMARY BY COUNTRY</td></tr>
+                    <tr><td colspan="2">
+                        <table class="table table-sm table-bordered mt-2">
+                            <thead>
+                                <tr>
+                                    <th>Country</th>
+                                    <th class="text-end">Income</th>
+                                    <th class="text-end">Expenses</th>
+                                    <th class="text-end">Net Income</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($country_totals as $country => $totals): 
+                                    $net = $totals['income'] - $totals['expense'];
+                                ?>
+                                <tr>
+                                    <td><?= $country ?></td>
+                                    <td class="text-end"><?= number_format($totals['income'], 2) ?></td>
+                                    <td class="text-end"><?= number_format($totals['expense'], 2) ?></td>
+                                    <td class="text-end <?= $net >= 0 ? 'text-success' : 'text-danger' ?>"><?= number_format($net, 2) ?></td>
+                                </tr>
+                                <?php endforeach; ?>
+                                <tr class="fw-bold">
+                                    <td>TOTAL</td>
+                                    <td class="text-end"><?= number_format($revenue, 2) ?></td>
+                                    <td class="text-end"><?= number_format($expenses, 2) ?></td>
+                                    <td class="text-end <?= $net_income >= 0 ? 'text-success' : 'text-danger' ?>"><?= number_format($net_income, 2) ?></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </td></tr>
+                    <?php endif; ?>
                 </tbody>
             </table>
         </div>
     </div>
 </div>
 </body>
-</html>
+</html> 

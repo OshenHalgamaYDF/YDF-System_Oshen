@@ -76,6 +76,10 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\system_isur
         <a href="trial_balance.php" class="btn btn-warning text-dark">📊 Trial Balance</a>
         <a href="income_statement.php" class="btn btn-danger">📈 Income Statement</a>
         <a href="balance_sheet.php" class="btn btn-primary" style="background-color:#6610f2;">💰 Balance Sheet</a>
+        <!-- Exchange Rate Update Button -->
+        <button id="fetchExchangeRatesBtn" class="btn btn-success" onclick="fetchAndUpdateRates()">
+            <i class="fas fa-sync-alt"></i> 🔄 Update Exchange Rates
+        </button>
     </div>
 
     <!-- Flash messages: simple feedback after actions (delete/update/save) -->
@@ -192,785 +196,844 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\system_isur
             </div>
         </div>
     </div>
-<!-- All Vouchers table -->
-<div class="card mb-4">
-    <div class="card-header bg-dark text-white">All Vouchers</div>
-    <div class="card-body table-responsive">
-        <table id="vouchersTable" class="table table-bordered table-striped">
-            <thead class="table-dark">
-                <tr><th>ID</th><th>Type</th><th>Date</th><th>Entries</th><th>Narration</th><th>Actions</th></tr>
-            </thead>
-            <tbody>
-                <?php if ($vouchers && $vouchers->num_rows > 0): ?>
-                    <?php while ($v = $vouchers->fetch_assoc()): ?>
-                        <tr>
-                            <td><?= intval($v['voucher_id']); ?></td>
-                            <td><?= htmlspecialchars($v['voucher_type']); ?></td>
-                            <td><?= htmlspecialchars($v['date']); ?></td>
-                            <td class="text-start">
-                                <?= $v['entries']; ?>
-                                <?php if (isset($v['country_name']) && $v['country_name'] == 'All Countries'): ?>
-                                    <br><span class="badge bg-info mt-1">🌍 Global</span>
-                                <?php endif; ?>
-                            </td>
-                            <td class="text-start"><?= htmlspecialchars($v['narration']); ?></td>
-                            <td>
-                                <button class="btn btn-sm btn-warning edit-btn" data-id="<?= intval($v['voucher_id']); ?>" title="Edit">
-                                    <i class="fas fa-edit"></i>
-                                </button>
-                                <button class="btn btn-sm btn-danger delete-btn" data-id="<?= intval($v['voucher_id']); ?>" title="Delete">
-                                    <i class="fas fa-trash-alt"></i>
-                                </button>
-                            </td>
-                        </tr>
-                    <?php endwhile; ?>
-                <?php endif; ?>
-            </tbody>
-        </table>
+    
+    <!-- All Vouchers table -->
+    <div class="card mb-4">
+        <div class="card-header bg-dark text-white">All Vouchers</div>
+        <div class="card-body table-responsive">
+            <table id="vouchersTable" class="table table-bordered table-striped">
+                <thead class="table-dark">
+                    <tr><th>ID</th><th>Type</th><th>Date</th><th>Entries</th><th>Narration</th><th>Actions</th></tr>
+                </thead>
+                <tbody>
+                    <?php if ($vouchers && $vouchers->num_rows > 0): ?>
+                        <?php while ($v = $vouchers->fetch_assoc()): ?>
+                            <tr>
+                                <td><?= intval($v['voucher_id']); ?></td>
+                                <td><?= htmlspecialchars($v['voucher_type']); ?></td>
+                                <td><?= htmlspecialchars($v['date']); ?></td>
+                                <td class="text-start">
+                                    <?= $v['entries']; ?>
+                                    <?php if (isset($v['country_name']) && $v['country_name'] == 'All Countries'): ?>
+                                        <br><span class="badge bg-info mt-1">🌍 Global</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td class="text-start"><?= htmlspecialchars($v['narration']); ?></td>
+                                <td>
+                                    <button class="btn btn-sm btn-warning edit-btn" data-id="<?= intval($v['voucher_id']); ?>" title="Edit">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-danger delete-btn" data-id="<?= intval($v['voucher_id']); ?>" title="Delete">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        <?php endwhile; ?>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
     </div>
-</div>
 
-<!-- ==========================
-     Modal: Edit Voucher 
-     - Content is loaded via AJAX when user clicks Edit
-     - Form posts back with name="update_voucher" (JS appends this) so controller can detect update
-     ========================== -->
-<div class="modal fade" id="editVoucherModal" tabindex="-1">
-  <div class="modal-dialog modal-lg">
-    <form method="POST" class="modal-content" id="editVoucherForm" action="<?= htmlspecialchars($_SERVER['PHP_SELF']); ?>">
-      <div class="modal-header bg-warning">
-        <h5 class="modal-title">Edit Voucher</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+    <!-- ==========================
+         Modal: Edit Voucher 
+         ========================== -->
+    <div class="modal fade" id="editVoucherModal" tabindex="-1">
+      <div class="modal-dialog modal-lg">
+        <form method="POST" class="modal-content" id="editVoucherForm" action="<?= htmlspecialchars($_SERVER['PHP_SELF']); ?>">
+          <div class="modal-header bg-warning">
+            <h5 class="modal-title">Edit Voucher</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body" id="editVoucherContent">
+            Loading...
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" name="update_voucher" class="btn btn-warning">Save Changes</button>
+          </div>
+        </form>
       </div>
+    </div>
+    
+    <!-- ==========================
+        Modal: Add (Voucher / Ledger) Combined
+        ========================== -->
+    <div class="modal fade" id="addCombinedModal" tabindex="-1">
+      <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+          <div class="modal-header">
+            <ul class="nav nav-tabs" role="tablist" style="flex:1">
+              <li class="nav-item" role="presentation"><a class="nav-link active" id="tab-voucher-tab" data-bs-toggle="tab" href="#tab-voucher" role="tab">🧾 Voucher</a></li>
+              <li class="nav-item" role="presentation"><a class="nav-link" id="tab-ledger-tab" data-bs-toggle="tab" href="#tab-ledger" role="tab">➕ Ledger</a></li>
+            </ul>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body tab-content">
+            <!-- Voucher tab -->
+            <div class="tab-pane fade show active" id="tab-voucher" role="tabpanel">
+              <form method="POST" id="addVoucherForm">
+               <div class="row mb-2">
+                  <div class="col-md-3">
+                     <label>Voucher Type</label>
+                     <select name="voucher_type" class="form-select" required>
+                        <option value="Payment">Payment</option>
+                        <option value="Receipt">Receipt</option>
+                        <option value="Journal">Journal</option>
+                        <option value="Contra">Contra</option>
+                     </select>
+                  </div>
+                  <div class="col-md-3">
+                     <label>Date</label>
+                     <input type="date" name="date" class="form-control" required value="<?= date('Y-m-d'); ?>">
+                  </div>
+                  <div class="col-md-3">
+                     <label>Amount (<?= htmlspecialchars($active_country['currency_code']) ?>)</label>
+                     <input type="text" name="amount" id="amountInput" class="form-control" required placeholder="e.g., $100 or 100">
+                  </div>
+                  <div class="col-md-3">
+                     <label>Currency</label>
+                     <select name="currency_id" id="currencySelect" class="form-select">
+                        <option value="1">LKR (Sri Lankan Rupee)</option>
+                        <option value="2">USD (US Dollar)</option>
+                        <option value="3">EUR (Euro)</option>
+                     </select>
+                  </div>
+               </div>
+               <div class="row mb-2">
+                  <div class="col-md-6">
+                     <label>Exchange Rate (1 FC = ? LKR)</label>
+                     <input type="number" name="exchange_rate" id="exchangeRateInput" class="form-control" step="0.000001" value="1.000000" readonly>
+                  </div>
+                  <div class="col-md-6">
+                     <label>LKR Equivalent</label>
+                     <div id="lkrPreview" class="form-control-plaintext">≈ 0.00 LKR</div>
+                  </div>
+               </div>
+               <div class="row mb-2">
+                  <div class="col-md-6">
+                     <label>Debit Ledger (Dr)</label>
+                     <select name="dr_ledger" id="drLedgerSelect" class="form-select" required>
+                        <option value="">-- Select --</option>
+                        <?php
+                        $ledgersDr = $conn->prepare("SELECT ledger_id, ledger_name FROM ledgers ORDER BY ledger_name ASC");
+                        $ledgersDr->execute();
+                        $resDr = $ledgersDr->get_result();
+                        while ($l = $resDr->fetch_assoc()) {
+                           echo "<option value='" . intval($l['ledger_id']) . "'>" . htmlspecialchars($l['ledger_name']) . "</option>";
+                        }
+                        $ledgersDr->close();
+                        ?>
+                    </select>
+                    </div>
+                    <div class="col-md-6">
+                       <label>Credit Ledger (Cr)</label>
+                       <select name="cr_ledger" id="crLedgerSelect" class="form-select" required>
+                          <option value="">-- Select --</option>
+                          <?php
+                          $ledgersCr = $conn->prepare("SELECT ledger_id, ledger_name FROM ledgers ORDER BY ledger_name ASC");
+                          $ledgersCr->execute();
+                          $resCr = $ledgersCr->get_result();
+                          while ($l = $resCr->fetch_assoc()) {
+                             echo "<option value='" . intval($l['ledger_id']) . "'>" . htmlspecialchars($l['ledger_name']) . "</option>";
+                          }
+                          $ledgersCr->close();
+                          ?>
+                       </select>
+                    </div>
+               </div>
+               <div class="mb-3">
+                  <label>Narration</label>
+                  <textarea name="narration" class="form-control" rows="2"></textarea>
+               </div>
+               <div class="text-end mt-3">
+                 <button type="button" class="btn btn-secondary me-2" data-bs-dismiss="modal">Close</button>
+                 <button type="submit" name="submit_voucher" class="btn btn-success">💾 Save Transaction</button>
+               </div>
+              </form>
+            </div>
 
-      <!-- this container will be replaced by AJAX response containing form inputs -->
-      <div class="modal-body" id="editVoucherContent">
-        Loading...
-      </div>
-
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-        <!-- submit button — JS appends update_voucher to form data on submit -->
-        <button type="submit" name="update_voucher" class="btn btn-warning">Save Changes</button>
-      </div>
-    </form>
-  </div>
-</div>
-<!-- ==========================
-    Modal: Add (Voucher / Ledger) Combined
-    - Single modal with tabs to add either a Voucher or a Ledger
-    - Keeps original form IDs so existing JS continues to work
-    ========================== -->
-<div class="modal fade" id="addCombinedModal" tabindex="-1">
-  <div class="modal-dialog modal-lg">
-    <div class="modal-content">
-      <div class="modal-header">
-        <ul class="nav nav-tabs" role="tablist" style="flex:1">
-          <li class="nav-item" role="presentation"><a class="nav-link active" id="tab-voucher-tab" data-bs-toggle="tab" href="#tab-voucher" role="tab">🧾 Voucher</a></li>
-          <li class="nav-item" role="presentation"><a class="nav-link" id="tab-ledger-tab" data-bs-toggle="tab" href="#tab-ledger" role="tab">➕ Ledger</a></li>
-        </ul>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body tab-content">
-        <!-- Voucher tab (keeps original form) -->
-        <div class="tab-pane fade show active" id="tab-voucher" role="tabpanel">
-          <form method="POST" id="addVoucherForm">
-           <div class="row mb-2">
-              <div class="col-md-3">
-                 <label>Voucher Type</label>
-                 <select name="voucher_type" class="form-select" required>
-                    <option value="Payment">Payment</option>
-                    <option value="Receipt">Receipt</option>
-                    <option value="Journal">Journal</option>
-                    <option value="Contra">Contra</option>
-                 </select>
-              </div>
-              <div class="col-md-3">
-                 <label>Date</label>
-                 <input type="date" name="date" class="form-control" required value="<?= date('Y-m-d'); ?>">
-              </div>
-              <div class="col-md-3">
-                 <label>Amount (<?= htmlspecialchars($active_country['currency_code']) ?>)</label>
-                 <input type="text" name="amount" id="amountInput" class="form-control" required placeholder="e.g., $100 or 100">
-              </div>
-              <div class="col-md-3">
-                 <label>Currency</label>
-                 <select name="currency_id" id="currencySelect" class="form-select">
-                    <option value="1">LKR (Sri Lankan Rupee)</option>
-                    <option value="2">USD (US Dollar)</option>
-                    <option value="3">EUR (Euro)</option>
-                    <!-- Add more currencies as needed -->
-                 </select>
-              </div>
-           </div>
-           <div class="row mb-2">
-              <div class="col-md-6">
-                 <label>Exchange Rate (to LKR)</label>
-                 <input type="number" name="exchange_rate" id="exchangeRateInput" class="form-control" step="0.000001" value="1.000000" readonly>
-              </div>
-              <div class="col-md-6">
-                 <label>LKR Equivalent</label>
-                 <div id="lkrPreview" class="form-control-plaintext">≈ 0.00 LKR</div>
-              </div>
-           </div>
-           <div class="row mb-2">
-              <div class="col-md-6">
-                 <label>Debit Ledger (Dr)</label>
-                 <select name="dr_ledger" id="drLedgerSelect" class="form-select" required>
-                    <option value="">-- Select --</option>
+            <!-- Ledger tab -->
+            <div class="tab-pane fade" id="tab-ledger" role="tabpanel">
+              <form method="POST" id="addLedgerForm">
+               <div class="mb-2">
+                <label>Account Group</label>
+                <select name="group_id" class="form-select mb-2" required>
+                    <option value="">-- Select Account Group --</option>
                     <?php
-                    $ledgersDr = $conn->prepare("SELECT ledger_id, ledger_name FROM ledgers ORDER BY ledger_name ASC");
-                    $ledgersDr->execute();
-                    $resDr = $ledgersDr->get_result();
-                    while ($l = $resDr->fetch_assoc()) {
-                       echo "<option value='" . intval($l['ledger_id']) . "'>" . htmlspecialchars($l['ledger_name']) . "</option>";
-                    }
-                    $ledgersDr->close();
-                    ?>
+                  $groups = $conn->prepare("SELECT group_id, group_name, group_type FROM account_groups ORDER BY group_name ASC");
+                  $groups->execute();
+                  $resGroups = $groups->get_result();
+                  while ($g = $resGroups->fetch_assoc()) {
+                     echo "<option value='" . intval($g['group_id']) . "'>" . htmlspecialchars($g['group_name']) . " (" . htmlspecialchars($g['group_type']) . ")</option>";
+                  }
+                  $groups->close();
+                  ?>
                 </select>
-                </div>
-                <div class="col-md-6">
-                   <label>Credit Ledger (Cr)</label>
-                   <select name="cr_ledger" id="crLedgerSelect" class="form-select" required>
-                      <option value="">-- Select --</option>
-                      <?php
-                      $ledgersCr = $conn->prepare("SELECT ledger_id, ledger_name FROM ledgers ORDER BY ledger_name ASC");
-                      $ledgersCr->execute();
-                      $resCr = $ledgersCr->get_result();
-                      while ($l = $resCr->fetch_assoc()) {
-                         echo "<option value='" . intval($l['ledger_id']) . "'>" . htmlspecialchars($l['ledger_name']) . "</option>";
-                      }
-                      $ledgersCr->close();
-                      ?>
-                   </select>
-                </div>
-           </div>
-           <div class="mb-3">
-              <label>Narration</label>
-              <textarea name="narration" class="form-control" rows="2"></textarea>
-           </div>
-           <div class="text-end mt-3">
-             <button type="button" class="btn btn-secondary me-2" data-bs-dismiss="modal">Close</button>
-             <button type="submit" name="submit_voucher" class="btn btn-success">💾 Save Transaction</button>
-           </div>
-          </form>
-        </div>
-
-        <!-- Ledger tab (keeps original form and id so JS works) -->
-        <div class="tab-pane fade" id="tab-ledger" role="tabpanel">
-          <form method="POST" id="addLedgerForm">
-           <div class="mb-2">
-            <label>Account Group</label>
-            <select name="group_id" class="form-select mb-2" required>
-                <option value="">-- Select Account Group --</option>
-                <?php
-              $groups = $conn->prepare("SELECT group_id, group_name, group_type FROM account_groups ORDER BY group_name ASC");
-              $groups->execute();
-              $resGroups = $groups->get_result();
-              while ($g = $resGroups->fetch_assoc()) {
-                 echo "<option value='" . intval($g['group_id']) . "'>" . htmlspecialchars($g['group_name']) . " (" . htmlspecialchars($g['group_type']) . ")</option>";
-              }
-              $groups->close();
-              ?>
-            </select>
-            <label>Ledger Name</label>
-            <input type="text" name="ledger_name" class="form-control mb-2" required>
-
-            <label>Opening Balance</label>
-            <input type="number" step="0.01" name="opening_balance" class="form-control mb-2" value="0">
-
-            <label>Type</label>
-            <select name="balance_type" class="form-select mb-2">
-                <option value="Dr">Dr</option>
-                <option value="Cr">Cr</option>
-            </select>
-           </div>
-           <div class="text-end mt-3">
-             <button type="button" class="btn btn-secondary me-2" data-bs-dismiss="modal">Close</button>
-             <button type="submit" name="add_ledger" class="btn btn-success">💾 Save Ledger</button>
-           </div>
-          </form>
+                <label>Ledger Name</label>
+                <input type="text" name="ledger_name" class="form-control mb-2" required>
+                <label>Opening Balance</label>
+                <input type="number" step="0.01" name="opening_balance" class="form-control mb-2" value="0">
+                <label>Type</label>
+                <select name="balance_type" class="form-select mb-2">
+                    <option value="Dr">Dr</option>
+                    <option value="Cr">Cr</option>
+                </select>
+               </div>
+               <div class="text-end mt-3">
+                 <button type="button" class="btn btn-secondary me-2" data-bs-dismiss="modal">Close</button>
+                 <button type="submit" name="add_ledger" class="btn btn-success">💾 Save Ledger</button>
+               </div>
+              </form>
+            </div>
+          </div>
         </div>
       </div>
-    </div>
-  </div>
-</div> 
+    </div> 
 
-<script>
-// Handle Add Ledger form submission via AJAX
-document.getElementById('addLedgerForm')?.addEventListener('submit', function(e) {
-    e.preventDefault();
-    
-    const formData = new FormData(this);
-    formData.append('add_ledger', '1');
-    
-    const submitBtn = this.querySelector('button[type="submit"]');
-    if (submitBtn) {
-       submitBtn.disabled = true;
-       submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Saving...';
-    }
-    
-    fetch(window.location.pathname, {
-       method: 'POST',
-       headers: { 'X-Requested-With': 'XMLHttpRequest' },
-       body: formData
-    })
-    .then(response => response.json())
-.then(data => {
-       if (data.success) {
-          // If server returned the new ledger, append it immediately for snappy UX
-          if (data.ledger && data.ledger.ledger_id) {
-             const drSelect = document.getElementById('drLedgerSelect');
-             const crSelect = document.getElementById('crLedgerSelect');
-             const optionHtml = `<option value="${data.ledger.ledger_id}">${data.ledger.ledger_name}</option>`;
-             if (drSelect) drSelect.insertAdjacentHTML('beforeend', optionHtml);
-             if (crSelect) crSelect.insertAdjacentHTML('beforeend', optionHtml);
-          }
-
-          // Refresh complete list but do NOT auto-select the newly created ledger — keep "-- Select --" so user chooses explicitly
-          refreshLedgerDropdowns().then(() => {
-              // No automatic selection; dropdowns remain at default
-          }).catch(()=>{});
-
-          // Keep the combined modal open so user can continue working
-          // Switch to the Voucher tab to let them immediately create a voucher
-          var tabVoucher = document.querySelector('#tab-voucher-tab');
-          if (tabVoucher) {
-              var tab = new bootstrap.Tab(tabVoucher);
-              tab.show();
-          }
-
-          // Reset ledger part of the form
-          this.reset();
-
-          // Show success toast and keep modal open
-          Swal.fire({toast: true, position: 'top-end', icon: 'success', title: 'Ledger added', showConfirmButton: false, timer: 1400});
-       } else {
-          Swal.fire('Error', data.message || 'Failed to add ledger', 'error');
-       }
-    })
-    .catch(error => {
-       console.error('Error:', error);
-       Swal.fire('Error', 'Network error: ' + error.message, 'error');
-    })
-    .finally(() => {
-       if (submitBtn) {
-          submitBtn.disabled = false;
-          submitBtn.innerHTML = '💾 Save Ledger';
-       }
-    });
-});
-
-// Function to refresh ledger dropdowns in real-time
-function refreshLedgerDropdowns(selectedId = null) {
-    // return a promise so callers can wait for completion
-    return fetch(window.location.pathname + '?action=get_ledgers')
-       .then(response => response.json())
-       .then(data => {
-          if (data.ledgers) {
-             const drSelect = document.getElementById('drLedgerSelect');
-             const crSelect = document.getElementById('crLedgerSelect');
-             
-             const defaultOption = '<option value="">-- Select --</option>';
-             let ledgerOptions = '';
-             
-             data.ledgers.forEach(ledger => {
-                ledgerOptions += `<option value="${ledger.ledger_id}">${ledger.ledger_name}</option>`;
-             });
-             
-             if (drSelect) drSelect.innerHTML = defaultOption + ledgerOptions;
-             if (crSelect) crSelect.innerHTML = defaultOption + ledgerOptions;
-
-             // If caller requested a selectedId, set it (if present in list)
-             if (selectedId) {
-                 if (drSelect) drSelect.value = selectedId;
-                 if (crSelect) crSelect.value = selectedId;
-             }
-          }
-       })
-       .catch(error => {
-           console.error('Error refreshing ledgers:', error);
-           throw error;
-       });
-}
-
-// Preload currencies/rates or fetch dynamically:
-async function fetchRate(currencyCode, date) {
-  // Example: server endpoint ?action=get_rate&code=USD&date=2026-01-14
-  const res = await fetch(window.location.pathname + `?action=get_rate&code=${encodeURIComponent(currencyCode)}&date=${encodeURIComponent(date)}`);
-  const json = await res.json();
-  return json.rate || null;
-}
-
-// Function to fetch exchange rate
-async function fetchRate(currencyCode, date) {
-  try {
-    const res = await fetch(window.location.pathname + `?action=get_rate&code=${encodeURIComponent(currencyCode)}&date=${encodeURIComponent(date)}`);
-    const json = await res.json();
-    return json.rate || null;
-  } catch (e) {
-    console.error('Error fetching rate:', e);
-    return null;
-  }
-}
-
-const amountInput = document.getElementById('amountInput');
-const currencySelect = document.getElementById('currencySelect');
-const exchangeRateInput = document.getElementById('exchangeRateInput');
-const lkrPreview = document.getElementById('lkrPreview');
-const dateInput = document.querySelector('input[name="date"]');
-
-async function updateConversion() {
-  let raw = amountInput.value.trim();
-  // Detect $ (USD) or other symbols (extend as needed)
-  if (/^\s*\$/.test(raw)) {
-    currencySelect.value = '2'; // Assuming USD is value 2
-    raw = raw.replace(/^\s*\$\s*/, '');
-    amountInput.value = raw;
-  }
-  const amount = parseFloat(raw) || 0;
-  const currencyId = currencySelect.value;
-  const currencyCode = currencySelect.options[currencySelect.selectedIndex].text.split(' ')[0]; // e.g., 'USD'
-  if (currencyId === '1' || currencyCode === 'LKR') { // Assuming LKR is 1
-    lkrPreview.textContent = `≈ ${amount.toFixed(2)} LKR`;
-    exchangeRateInput.value = 1;
-    return;
-  }
-  // get rate for selected currency and date
-  const rate = await fetchRate(currencyCode, dateInput.value || new Date().toISOString().slice(0,10));
-  if (rate) {
-    exchangeRateInput.value = parseFloat(rate).toFixed(6);
-    const amountLkr = (amount * parseFloat(rate));
-    lkrPreview.textContent = `≈ ${amountLkr.toFixed(2)} LKR`;
-  } else {
-    lkrPreview.textContent = 'Rate not found';
-  }
-}
-
-// Bind events
-amountInput.addEventListener('input', () => { updateConversion().catch(console.error); });
-currencySelect.addEventListener('change', () => { updateConversion().catch(console.error); });
-dateInput.addEventListener('change', () => { updateConversion().catch(console.error); });
-</script>
-
-<!-- ==========================
-     Scripts: Bootstrap, jQuery, DataTables, SweetAlert, DateRangePicker
-     - DOM-ready JS initializes DataTables and handles edit/delete via AJAX/fetch
-     ========================== -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-<!-- jQuery (required by DataTables and DateRangePicker) -->
-<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-<!-- Moment.js (required by DateRangePicker) -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/moment.min.js"></script>
-<!-- Date Range Picker JS -->
-<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
-<!-- DataTables core + Bootstrap integration -->
-<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
-<script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
-<!-- SweetAlert2 used for nicer confirmations -->
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    let currentEditModal = null;
-    // Auto-dismiss and left-close behavior for flash alerts (5s)
-    (function() {
-        const AUTO_DISMISS_MS = 5000;
-        function closeAlert(alert) {
-            if (!alert || alert.classList.contains('fading')) return;
-            alert.classList.add('fading', 'fade-out');
-            setTimeout(() => alert.remove(), 450);
+    <script>
+    // Handle Add Ledger form submission via AJAX
+    document.getElementById('addLedgerForm')?.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const formData = new FormData(this);
+        formData.append('add_ledger', '1');
+        
+        const submitBtn = this.querySelector('button[type="submit"]');
+        if (submitBtn) {
+           submitBtn.disabled = true;
+           submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Saving...';
         }
+        
+        fetch(window.location.pathname, {
+           method: 'POST',
+           headers: { 'X-Requested-With': 'XMLHttpRequest' },
+           body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+           if (data.success) {
+              if (data.ledger && data.ledger.ledger_id) {
+                 const drSelect = document.getElementById('drLedgerSelect');
+                 const crSelect = document.getElementById('crLedgerSelect');
+                 const optionHtml = `<option value="${data.ledger.ledger_id}">${data.ledger.ledger_name}</option>`;
+                 if (drSelect) drSelect.insertAdjacentHTML('beforeend', optionHtml);
+                 if (crSelect) crSelect.insertAdjacentHTML('beforeend', optionHtml);
+              }
 
-        document.querySelectorAll('.alert').forEach(alert => {
-            // attach click handler for left close
-            const btn = alert.querySelector('.alert-close-left');
-            if (btn) {
-                btn.addEventListener('click', () => closeAlert(alert));
-            } else {
-                const b = document.createElement('button');
-                b.type = 'button';
-                b.className = 'alert-close-left';
-                b.setAttribute('aria-label', 'Close');
-                b.innerHTML = '<i class="fas fa-times"></i>';
-                b.addEventListener('click', () => closeAlert(alert));
-                alert.prepend(b);
+              refreshLedgerDropdowns().then(() => {
+              }).catch(()=>{});
+
+              var tabVoucher = document.querySelector('#tab-voucher-tab');
+              if (tabVoucher) {
+                  var tab = new bootstrap.Tab(tabVoucher);
+                  tab.show();
+              }
+
+              this.reset();
+
+              Swal.fire({toast: true, position: 'top-end', icon: 'success', title: 'Ledger added', showConfirmButton: false, timer: 1400});
+           } else {
+              Swal.fire('Error', data.message || 'Failed to add ledger', 'error');
+           }
+        })
+        .catch(error => {
+           console.error('Error:', error);
+           Swal.fire('Error', 'Network error: ' + error.message, 'error');
+        })
+        .finally(() => {
+           if (submitBtn) {
+              submitBtn.disabled = false;
+              submitBtn.innerHTML = '💾 Save Ledger';
+           }
+        });
+    });
+
+    // Function to refresh ledger dropdowns
+    function refreshLedgerDropdowns(selectedId = null) {
+        return fetch(window.location.pathname + '?action=get_ledgers')
+           .then(response => response.json())
+           .then(data => {
+              if (data.ledgers) {
+                 const drSelect = document.getElementById('drLedgerSelect');
+                 const crSelect = document.getElementById('crLedgerSelect');
+                 
+                 const defaultOption = '<option value="">-- Select --</option>';
+                 let ledgerOptions = '';
+                 
+                 data.ledgers.forEach(ledger => {
+                    ledgerOptions += `<option value="${ledger.ledger_id}">${ledger.ledger_name}</option>`;
+                 });
+                 
+                 if (drSelect) drSelect.innerHTML = defaultOption + ledgerOptions;
+                 if (crSelect) crSelect.innerHTML = defaultOption + ledgerOptions;
+
+                 if (selectedId) {
+                     if (drSelect) drSelect.value = selectedId;
+                     if (crSelect) crSelect.value = selectedId;
+                 }
+              }
+           })
+           .catch(error => {
+               console.error('Error refreshing ledgers:', error);
+               throw error;
+           });
+    }
+
+    // ========== FIXED: Exchange Rate Functions ==========
+    // Function to fetch exchange rate - Now returns LKR per foreign currency
+    async function fetchRate(currencyCode, date) {
+        try {
+            // First try to get from database
+            const res = await fetch(window.location.pathname + `?action=get_rate&code=${encodeURIComponent(currencyCode)}&date=${encodeURIComponent(date)}`);
+            const json = await res.json();
+            
+            if (json.rate) {
+                console.log(`Rate from DB: 1 ${currencyCode} = ${json.rate} LKR`);
+                return json.rate;
             }
+            
+            // If not in DB, try API as fallback
+            console.log(`Rate not in DB, fetching from API for ${currencyCode}`);
+            const apiRes = await fetch(`https://v6.exchangerate-api.com/v6/ccd0aba3dbaef425612cd487/latest/USD`);
+            const apiData = await apiRes.json();
+            
+            if (apiData.result === 'success' && apiData.conversion_rates[currencyCode] && apiData.conversion_rates['LKR']) {
+                // Calculate LKR per foreign currency
+                const rate = apiData.conversion_rates['LKR'] / apiData.conversion_rates[currencyCode];
+                console.log(`Rate from API: 1 ${currencyCode} = ${rate} LKR`);
+                return rate;
+            }
+            
+            return null;
+        } catch (e) {
+            console.error('Error fetching rate:', e);
+            return null;
+        }
+    }
 
-            // schedule auto-dismiss unless marked sticky via data-sticky="1"
-            if (!alert.dataset.sticky) {
-                setTimeout(() => closeAlert(alert), AUTO_DISMISS_MS);
+    const amountInput = document.getElementById('amountInput');
+    const currencySelect = document.getElementById('currencySelect');
+    const exchangeRateInput = document.getElementById('exchangeRateInput');
+    const lkrPreview = document.getElementById('lkrPreview');
+    const dateInput = document.querySelector('input[name="date"]');
+
+    // FIXED: Update conversion function
+    async function updateConversion() {
+        let raw = amountInput.value.trim();
+        
+        // Detect currency symbols
+        if (/^\s*\$/.test(raw)) {
+            currencySelect.value = '2'; // USD
+            raw = raw.replace(/^\s*\$\s*/, '');
+            amountInput.value = raw;
+        } else if (/^\s*€/.test(raw)) {
+            currencySelect.value = '3'; // EUR
+            raw = raw.replace(/^\s*€\s*/, '');
+            amountInput.value = raw;
+        } else if (/^\s*£/.test(raw)) {
+            // Try to find GBP in select options
+            const gbpOption = Array.from(currencySelect.options).find(opt => opt.text.includes('GBP'));
+            if (gbpOption) {
+                currencySelect.value = gbpOption.value;
+                raw = raw.replace(/^\s*£\s*/, '');
+                amountInput.value = raw;
+            }
+        }
+        
+        const amount = parseFloat(raw) || 0;
+        const currencyId = currencySelect.value;
+        const selectedOption = currencySelect.options[currencySelect.selectedIndex];
+        const currencyCode = selectedOption ? selectedOption.text.split(' ')[0] : 'LKR';
+        
+        // If LKR selected
+        if (currencyId === '1' || currencyCode === 'LKR') {
+            lkrPreview.textContent = `≈ ${amount.toFixed(2)} LKR`;
+            exchangeRateInput.value = 1;
+            return;
+        }
+        
+        // Get rate for selected currency (how many LKR per unit)
+        const rate = await fetchRate(currencyCode, dateInput.value || new Date().toISOString().slice(0,10));
+        
+        if (rate) {
+            exchangeRateInput.value = parseFloat(rate).toFixed(6);
+            const amountLkr = (amount * parseFloat(rate));
+            lkrPreview.textContent = `≈ ${amountLkr.toFixed(2)} LKR`;
+            console.log(`Conversion: ${amount} ${currencyCode} × ${rate} = ${amountLkr} LKR`);
+        } else {
+            lkrPreview.textContent = 'Rate not found';
+            exchangeRateInput.value = '';
+        }
+    }
+
+    // Bind events
+    amountInput.addEventListener('input', () => { updateConversion().catch(console.error); });
+    currencySelect.addEventListener('change', () => { updateConversion().catch(console.error); });
+    dateInput.addEventListener('change', () => { updateConversion().catch(console.error); });
+
+    // ========== FIXED: Exchange Rate Update Functions ==========
+    // Fetch and update exchange rates from API
+    function fetchAndUpdateRates() {
+        // Show loading state
+        const btn = document.getElementById('fetchExchangeRatesBtn');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Fetching rates...';
+        btn.disabled = true;
+
+        // Show SweetAlert loading
+        Swal.fire({
+            title: 'Fetching Exchange Rates',
+            text: 'Please wait while we update rates from the API...',
+            allowOutsideClick: false,
+            didOpen: () => {
+                Swal.showLoading();
             }
         });
-    })();
 
-    // Initialize DateRangePicker
-    let startDate = moment().subtract(6, 'days');
-    let endDate = moment();
-    
-    function updateDateRangeDisplay(start, end) {
-        $('#reportrange span').html(start.format('MMMM D, YYYY') + ' - ' + end.format('MMMM D, YYYY'));
-        document.getElementById('periodStart').textContent = start.format('YYYY-MM-DD');
-        document.getElementById('periodEnd').textContent = end.format('YYYY-MM-DD');
-        document.getElementById('periodDays').textContent = end.diff(start, 'days') + 1 + ' days';
-    }
-    
-    $('#reportrange').daterangepicker({
-        startDate: startDate,
-        endDate: endDate,
-        ranges: {
-           'Today': [moment(), moment()],
-           'Yesterday': [moment().subtract(1, 'days'), moment().subtract(1, 'days')],
-           'Last 7 Days': [moment().subtract(6, 'days'), moment()],
-           'Last 30 Days': [moment().subtract(29, 'days'), moment()],
-           'This Month': [moment().startOf('month'), moment().endOf('month')],
-           'Last Month': [moment().subtract(1, 'month').startOf('month'), moment().subtract(1, 'month').endOf('month')],
-           'Last 3 Months': [moment().subtract(3, 'months').startOf('month'), moment().endOf('month')],
-           'Last 6 Months': [moment().subtract(6, 'months').startOf('month'), moment().endOf('month')],
-           'This Year': [moment().startOf('year'), moment().endOf('year')],
-           'Last Year': [moment().subtract(1, 'year').startOf('year'), moment().subtract(1, 'year').endOf('year')]
-        }
-    }, function(start, end, label) {
-        updateDateRangeDisplay(start, end);
-        loadCashProfitData(start.format('YYYY-MM-DD'), end.format('YYYY-MM-DD'));
-    });
-    
-    updateDateRangeDisplay(startDate, endDate);
-
-    // Fetch cash profit data for the graph with date range
-    function loadCashProfitData(startDate = null, endDate = null) {
-        // Show loading indicator
-        document.getElementById('chartLoading').style.display = 'block';
-        document.getElementById('chartContainer').style.opacity = '0.5';
-        
-        let url = window.location.pathname + '?action=get_cash_profit';
-        if (startDate && endDate) {
-            url += '&start_date=' + encodeURIComponent(startDate) + '&end_date=' + encodeURIComponent(endDate);
-        }
-        
-        fetch(url)
+        // Make API call - Using USD as base to get rates FROM USD
+        fetch('https://v6.exchangerate-api.com/v6/ccd0aba3dbaef425612cd487/latest/USD')
             .then(response => response.json())
             .then(data => {
-                // Hide loading indicator
-                document.getElementById('chartLoading').style.display = 'none';
-                document.getElementById('chartContainer').style.opacity = '1';
-                
-                if (data.success) {
-                    // Update summary numbers
-                    document.getElementById('totalCashIn').textContent = data.totals.total_in.toFixed(2) + ' <?= htmlspecialchars($active_country['currency_code']) ?>';
-                    document.getElementById('totalCashOut').textContent = data.totals.total_out.toFixed(2) + ' <?= htmlspecialchars($active_country['currency_code']) ?>';
-                    document.getElementById('netCashProfit').textContent = data.totals.net_profit.toFixed(2) + ' <?= htmlspecialchars($active_country['currency_code']) ?>';
+                if (data.result === 'success') {
+                    // Process and store the rates
+                    return storeExchangeRates(data);
+                } else {
+                    throw new Error('API returned error: ' + (data['error-type'] || 'Unknown error'));
+                }
+            })
+            .then(result => {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Success!',
+                    text: `Updated ${result.updated} exchange rates successfully.`,
+                    timer: 3000
+                });
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Failed to Update Rates',
+                    text: error.message || 'Could not fetch exchange rates. Please try again later.'
+                });
+            })
+            .finally(() => {
+                // Reset button
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            });
+    }
+
+    // Store exchange rates in database
+    async function storeExchangeRates(apiData) {
+        const rates = apiData.conversion_rates;
+        const rateDate = new Date().toISOString().split('T')[0]; // Today's date
+        
+        // Get LKR rate from USD base
+        const lkrRate = rates['LKR'];
+        
+        if (!lkrRate) {
+            throw new Error('LKR rate not found in API response');
+        }
+        
+        console.log(`Base LKR rate: 1 USD = ${lkrRate} LKR`);
+        
+        // Prepare data for all currencies we want to store
+        // We'll store how many LKR per unit of foreign currency
+        const currenciesToStore = ['USD', 'EUR', 'GBP', 'JPY', 'AUD', 'CAD', 'CHF', 'CNY', 'INR'];
+        const updatedRates = [];
+        
+        for (const currencyCode of currenciesToStore) {
+            if (rates[currencyCode]) {
+                try {
+                    // Get currency_id from currencies table
+                    const currencyResponse = await fetch(window.location.pathname + '?action=get_currency_id&code=' + currencyCode);
+                    const currencyData = await currencyResponse.json();
                     
-                    // Create/update chart
-                    const ctx = document.getElementById('cashProfitChart').getContext('2d');
-                    
-                    // Destroy existing chart if it exists
-                    if (window.cashProfitChart instanceof Chart) {
-                        window.cashProfitChart.destroy();
+                    if (currencyData.currency_id) {
+                        // Calculate LKR per unit of foreign currency
+                        // If 1 USD = 309 LKR, and 1 USD = 0.85 EUR, then 1 EUR = 309/0.85 = 363.53 LKR
+                        const rateToLkr = lkrRate / rates[currencyCode];
+                        
+                        // Store the rate
+                        const storeResponse = await fetch(window.location.pathname, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/x-www-form-urlencoded',
+                            },
+                            body: new URLSearchParams({
+                                'update_exchange_rate': '1',
+                                'currency_id': currencyData.currency_id,
+                                'rate_date': rateDate,
+                                'rate_to_lkr': rateToLkr,
+                                'source': 'API'
+                            })
+                        });
+                        
+                        const result = await storeResponse.json();
+                        if (result.success) {
+                            updatedRates.push(currencyCode);
+                            console.log(`Stored ${currencyCode}: 1 ${currencyCode} = ${rateToLkr.toFixed(2)} LKR (from USD rate: ${rates[currencyCode]})`);
+                        }
                     }
+                } catch (error) {
+                    console.error(`Failed to update ${currencyCode}:`, error);
+                }
+            }
+        }
+        
+        return { updated: updatedRates.length };
+    }
+    </script>
+
+    <!-- ==========================
+         Scripts
+         ========================== -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/moment.min.js"></script>
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        let currentEditModal = null;
+        
+        // Auto-dismiss alerts
+        (function() {
+            const AUTO_DISMISS_MS = 5000;
+            function closeAlert(alert) {
+                if (!alert || alert.classList.contains('fading')) return;
+                alert.classList.add('fading', 'fade-out');
+                setTimeout(() => alert.remove(), 450);
+            }
+
+            document.querySelectorAll('.alert').forEach(alert => {
+                const btn = alert.querySelector('.alert-close-left');
+                if (btn) {
+                    btn.addEventListener('click', () => closeAlert(alert));
+                } else {
+                    const b = document.createElement('button');
+                    b.type = 'button';
+                    b.className = 'alert-close-left';
+                    b.setAttribute('aria-label', 'Close');
+                    b.innerHTML = '<i class="fas fa-times"></i>';
+                    b.addEventListener('click', () => closeAlert(alert));
+                    alert.prepend(b);
+                }
+
+                if (!alert.dataset.sticky) {
+                    setTimeout(() => closeAlert(alert), AUTO_DISMISS_MS);
+                }
+            });
+        })();
+
+        // Initialize DateRangePicker
+        let startDate = moment().subtract(6, 'days');
+        let endDate = moment();
+        
+        function updateDateRangeDisplay(start, end) {
+            $('#reportrange span').html(start.format('MMMM D, YYYY') + ' - ' + end.format('MMMM D, YYYY'));
+            document.getElementById('periodStart').textContent = start.format('YYYY-MM-DD');
+            document.getElementById('periodEnd').textContent = end.format('YYYY-MM-DD');
+            document.getElementById('periodDays').textContent = end.diff(start, 'days') + 1 + ' days';
+        }
+        
+        $('#reportrange').daterangepicker({
+            startDate: startDate,
+            endDate: endDate,
+            ranges: {
+               'Today': [moment(), moment()],
+               'Yesterday': [moment().subtract(1, 'days'), moment().subtract(1, 'days')],
+               'Last 7 Days': [moment().subtract(6, 'days'), moment()],
+               'Last 30 Days': [moment().subtract(29, 'days'), moment()],
+               'This Month': [moment().startOf('month'), moment().endOf('month')],
+               'Last Month': [moment().subtract(1, 'month').startOf('month'), moment().subtract(1, 'month').endOf('month')],
+               'Last 3 Months': [moment().subtract(3, 'months').startOf('month'), moment().endOf('month')],
+               'Last 6 Months': [moment().subtract(6, 'months').startOf('month'), moment().endOf('month')],
+               'This Year': [moment().startOf('year'), moment().endOf('year')],
+               'Last Year': [moment().subtract(1, 'year').startOf('year'), moment().subtract(1, 'year').endOf('year')]
+            }
+        }, function(start, end, label) {
+            updateDateRangeDisplay(start, end);
+            loadCashProfitData(start.format('YYYY-MM-DD'), end.format('YYYY-MM-DD'));
+        });
+        
+        updateDateRangeDisplay(startDate, endDate);
+
+        // Fetch cash profit data
+        function loadCashProfitData(startDate = null, endDate = null) {
+            document.getElementById('chartLoading').style.display = 'block';
+            document.getElementById('chartContainer').style.opacity = '0.5';
+            
+            let url = window.location.pathname + '?action=get_cash_profit';
+            if (startDate && endDate) {
+                url += '&start_date=' + encodeURIComponent(startDate) + '&end_date=' + encodeURIComponent(endDate);
+            }
+            
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('chartLoading').style.display = 'none';
+                    document.getElementById('chartContainer').style.opacity = '1';
                     
-                    window.cashProfitChart = new Chart(ctx, {
-                        type: 'line',
-                        data: {
-                            labels: data.labels,
-                            datasets: [
-                                {
-                                    label: 'Cash In (Receipts)',
-                                    data: data.cashIn,
-                                    borderColor: 'rgb(40, 167, 69)',
-                                    backgroundColor: 'rgba(40, 167, 69, 0.1)',
-                                    tension: 0.1,
-                                    fill: true,
-                                    pointBackgroundColor: 'rgb(40, 167, 69)'
-                                },
-                                {
-                                    label: 'Cash Out (Payments)',
-                                    data: data.cashOut,
-                                    borderColor: 'rgb(220, 53, 69)',
-                                    backgroundColor: 'rgba(220, 53, 69, 0.1)',
-                                    tension: 0.1,
-                                    fill: true,
-                                    pointBackgroundColor: 'rgb(220, 53, 69)'
-                                },
-                                {
-                                    label: 'Net Profit',
-                                    data: data.netProfit,
-                                    borderColor: 'rgb(13, 110, 253)',
-                                    backgroundColor: 'rgba(13, 110, 253, 0.1)',
-                                    borderWidth: 3,
-                                    tension: 0.1,
-                                    fill: false,
-                                    pointBackgroundColor: 'rgb(13, 110, 253)'
-                                }
-                            ]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: {
-                                legend: {
-                                    position: 'top',
-                                },
-                                title: {
-                                    display: false
-                                },
-                                tooltip: {
-                                    mode: 'index',
-                                    intersect: false,
-                                    callbacks: {
-                                        label: function(context) {
-                                            let label = context.dataset.label || '';
-                                            if (label) {
-                                                label += ': ';
+                    if (data.success) {
+                        document.getElementById('totalCashIn').textContent = data.totals.total_in.toFixed(2) + ' <?= htmlspecialchars($active_country['currency_code']) ?>';
+                        document.getElementById('totalCashOut').textContent = data.totals.total_out.toFixed(2) + ' <?= htmlspecialchars($active_country['currency_code']) ?>';
+                        document.getElementById('netCashProfit').textContent = data.totals.net_profit.toFixed(2) + ' <?= htmlspecialchars($active_country['currency_code']) ?>';
+                        
+                        const ctx = document.getElementById('cashProfitChart').getContext('2d');
+                        
+                        if (window.cashProfitChart instanceof Chart) {
+                            window.cashProfitChart.destroy();
+                        }
+                        
+                        window.cashProfitChart = new Chart(ctx, {
+                            type: 'line',
+                            data: {
+                                labels: data.labels,
+                                datasets: [
+                                    {
+                                        label: 'Cash In (Receipts)',
+                                        data: data.cashIn,
+                                        borderColor: 'rgb(40, 167, 69)',
+                                        backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                                        tension: 0.1,
+                                        fill: true,
+                                        pointBackgroundColor: 'rgb(40, 167, 69)'
+                                    },
+                                    {
+                                        label: 'Cash Out (Payments)',
+                                        data: data.cashOut,
+                                        borderColor: 'rgb(220, 53, 69)',
+                                        backgroundColor: 'rgba(220, 53, 69, 0.1)',
+                                        tension: 0.1,
+                                        fill: true,
+                                        pointBackgroundColor: 'rgb(220, 53, 69)'
+                                    },
+                                    {
+                                        label: 'Net Profit',
+                                        data: data.netProfit,
+                                        borderColor: 'rgb(13, 110, 253)',
+                                        backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                                        borderWidth: 3,
+                                        tension: 0.1,
+                                        fill: false,
+                                        pointBackgroundColor: 'rgb(13, 110, 253)'
+                                    }
+                                ]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: {
+                                    legend: { position: 'top' },
+                                    tooltip: {
+                                        mode: 'index',
+                                        intersect: false,
+                                        callbacks: {
+                                            label: function(context) {
+                                                let label = context.dataset.label || '';
+                                                if (label) label += ': ';
+                                                if (context.parsed.y !== null) {
+                                                    label += context.parsed.y.toFixed(2) + ' <?= htmlspecialchars($active_country['currency_code']) ?>';
+                                                }
+                                                return label;
                                             }
-                                            if (context.parsed.y !== null) {
-                                                label += context.parsed.y.toFixed(2) + ' <?= htmlspecialchars($active_country['currency_code']) ?>';
-                                            }
-                                            return label;
                                         }
                                     }
-                                }
-                            },
-                            scales: {
-                                y: {
-                                    beginAtZero: true,
-                                    ticks: {
-                                        callback: function(value, index, values) {
-                                            return value.toFixed(2) + ' <?= htmlspecialchars($active_country['currency_code']) ?>';
+                                },
+                                scales: {
+                                    y: {
+                                        beginAtZero: true,
+                                        ticks: {
+                                            callback: function(value) {
+                                                return value.toFixed(2) + ' <?= htmlspecialchars($active_country['currency_code']) ?>';
+                                            }
                                         }
                                     }
                                 }
                             }
-                        }
-                    });
-                } else {
-                    console.error('Failed to load cash profit data');
+                        });
+                    } else {
+                        console.error('Failed to load cash profit data');
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error',
+                            text: 'Failed to load chart data: ' + (data.message || 'Unknown error')
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading cash profit data:', error);
+                    document.getElementById('chartLoading').style.display = 'none';
+                    document.getElementById('chartContainer').style.opacity = '1';
                     Swal.fire({
                         icon: 'error',
-                        title: 'Error',
-                        text: 'Failed to load chart data: ' + (data.message || 'Unknown error')
+                        title: 'Network Error',
+                        text: 'Failed to load chart data. Please try again.'
                     });
-                }
-            })
-            .catch(error => {
-                console.error('Error loading cash profit data:', error);
-                document.getElementById('chartLoading').style.display = 'none';
-                document.getElementById('chartContainer').style.opacity = '1';
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Network Error',
-                    text: 'Failed to load chart data. Please try again.'
                 });
-            });
-    }
-
-    // Initialize DataTables if available
-    // vouchersTable: sort by Date (column index 2) descending so newest vouchers appear on top
-    if (typeof jQuery !== 'undefined' && $.fn.dataTable) {
-        $('#vouchersTable').DataTable({
-            order: [[2, 'desc']],
-            pageLength: 10,
-            responsive: true,
-            columnDefs: [
-                // Entries column (3) and Actions column (5) should not be orderable
-                { orderable: false, targets: [3,5] }
-            ],
-            language: {
-                emptyTable: "No vouchers found for this country."
-            }
-        });
-    }
-
-    // Load initial cash profit data
-    loadCashProfitData(startDate.format('YYYY-MM-DD'), endDate.format('YYYY-MM-DD'));
-
-    // Refresh button handler
-    document.getElementById('refreshChartBtn').addEventListener('click', function() {
-        const range = $('#reportrange').data('daterangepicker');
-        loadCashProfitData(range.startDate.format('YYYY-MM-DD'), range.endDate.format('YYYY-MM-DD'));
-    });
-
-    // Global click listener to capture Edit and Delete button clicks inside table rows
-    document.addEventListener('click', function(e) {
-        // Edit button handler
-        let editBtn = e.target.closest('.edit-btn');
-        if (editBtn) {
-            const id = editBtn.dataset.id;
-            if (!id) return;
-
-            // Show modal with loading placeholder then fetch voucher edit form
-            const modalEl = document.getElementById('editVoucherModal');
-            currentEditModal = new bootstrap.Modal(modalEl);
-            const content = document.getElementById('editVoucherContent');
-            content.innerHTML = '<div class="text-center py-3"><div class="spinner-border text-primary" role="status"></div> Loading voucher details...</div>';
-
-            // Request partial (controller should respond to ?action=get_voucher&id=...)
-            fetch(window.location.pathname + '?action=get_voucher&id=' + encodeURIComponent(id))
-                .then(res => {
-                    if (!res.ok) throw new Error('HTTP ' + res.status);
-                    return res.text();
-                })
-                .then(html => {
-                    // Replace modal body with returned form HTML
-                    content.innerHTML = html;
-                    currentEditModal.show();
-                })
-                .catch(err => {
-                    content.innerHTML = '<div class="alert alert-danger">Error loading voucher: ' + err.message + '</div>';
-                    currentEditModal.show();
-                });
-            return;
         }
 
-        // Delete button handler
-        let deleteBtn = e.target.closest('.delete-btn');
-        if (deleteBtn) {
-            const voucherId = deleteBtn.getAttribute('data-id') || deleteBtn.dataset.id;
-            if (!voucherId) return;
+        // Initialize DataTables
+        if (typeof jQuery !== 'undefined' && $.fn.dataTable) {
+            $('#vouchersTable').DataTable({
+                order: [[2, 'desc']],
+                pageLength: 10,
+                responsive: true,
+                columnDefs: [
+                    { orderable: false, targets: [3,5] }
+                ],
+                language: {
+                    emptyTable: "No vouchers found for this country."
+                }
+            });
+        }
 
-            // Confirm deletion with SweetAlert if available, otherwise fallback to native confirm
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    title: 'Are you sure?',
-                    text: 'This will permanently delete the voucher and its entries.',
-                    icon: 'warning',
-                    showCancelButton: true,
-                    confirmButtonText: 'Yes, delete'
-                }).then(result => {
-                    if (!result.isConfirmed) return;
+        // Load initial cash profit data
+        loadCashProfitData(startDate.format('YYYY-MM-DD'), endDate.format('YYYY-MM-DD'));
+
+        // Refresh button handler
+        document.getElementById('refreshChartBtn').addEventListener('click', function() {
+            const range = $('#reportrange').data('daterangepicker');
+            loadCashProfitData(range.startDate.format('YYYY-MM-DD'), range.endDate.format('YYYY-MM-DD'));
+        });
+
+        // Global click listener for Edit and Delete buttons
+        document.addEventListener('click', function(e) {
+            let editBtn = e.target.closest('.edit-btn');
+            if (editBtn) {
+                const id = editBtn.dataset.id;
+                if (!id) return;
+
+                const modalEl = document.getElementById('editVoucherModal');
+                currentEditModal = new bootstrap.Modal(modalEl);
+                const content = document.getElementById('editVoucherContent');
+                content.innerHTML = '<div class="text-center py-3"><div class="spinner-border text-primary" role="status"></div> Loading voucher details...</div>';
+
+                fetch(window.location.pathname + '?action=get_voucher&id=' + encodeURIComponent(id))
+                    .then(res => {
+                        if (!res.ok) throw new Error('HTTP ' + res.status);
+                        return res.text();
+                    })
+                    .then(html => {
+                        content.innerHTML = html;
+                        currentEditModal.show();
+                    })
+                    .catch(err => {
+                        content.innerHTML = '<div class="alert alert-danger">Error loading voucher: ' + err.message + '</div>';
+                        currentEditModal.show();
+                    });
+                return;
+            }
+
+            let deleteBtn = e.target.closest('.delete-btn');
+            if (deleteBtn) {
+                const voucherId = deleteBtn.getAttribute('data-id') || deleteBtn.dataset.id;
+                if (!voucherId) return;
+
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        title: 'Are you sure?',
+                        text: 'This will permanently delete the voucher and its entries.',
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonText: 'Yes, delete'
+                    }).then(result => {
+                        if (!result.isConfirmed) return;
+                        const fd = new FormData();
+                        fd.append('delete_voucher', '1');
+                        fd.append('voucher_id', voucherId);
+                        fetch(window.location.pathname, { method: 'POST', body: fd })
+                            .then(() => { window.location.href = window.location.pathname + '?deleted=1'; })
+                            .catch(() => { Swal.fire('Error','Delete failed','error'); });
+                    });
+                } else {
+                    if (!confirm('Delete voucher? This cannot be undone.')) return;
                     const fd = new FormData();
                     fd.append('delete_voucher', '1');
                     fd.append('voucher_id', voucherId);
-                    // Submit deletion to the same page; controller should handle delete_voucher POST
                     fetch(window.location.pathname, { method: 'POST', body: fd })
                         .then(() => { window.location.href = window.location.pathname + '?deleted=1'; })
-                        .catch(() => { Swal.fire('Error','Delete failed','error'); });
+                        .catch(() => { alert('Delete failed'); });
+                }
+            }
+        });
+
+        // Edit voucher form submission handler
+        document.getElementById('editVoucherForm')?.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(this);
+            formData.append('update_voucher', '1');
+
+            const submitBtn = this.querySelector('button[type="submit"]');
+            
+            const drLedger = formData.get('dr_ledger');
+            const crLedger = formData.get('cr_ledger');
+            const amount = parseFloat(formData.get('amount'));
+            const voucherType = formData.get('voucher_type');
+            const date = formData.get('date');
+            
+            if (!drLedger || !crLedger || !amount || amount <= 0 || !voucherType || !date) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Validation Error',
+                    text: 'Please fill all required fields with valid values.'
                 });
-            } else {
-                if (!confirm('Delete voucher? This cannot be undone.')) return;
-                const fd = new FormData();
-                fd.append('delete_voucher', '1');
-                fd.append('voucher_id', voucherId);
-                fetch(window.location.pathname, { method: 'POST', body: fd })
-                    .then(() => { window.location.href = window.location.pathname + '?deleted=1'; })
-                    .catch(() => { alert('Delete failed'); });
+                return;
             }
-        }
-    });
-
-    // Edit voucher form submission handler (the edit form is loaded into modal body)
-    // We attach listener to the form element if present on initial page load (may be replaced later).
-    document.getElementById('editVoucherForm')?.addEventListener('submit', function(e) {
-        e.preventDefault();
-        
-        // Build form data and let controller know this is an update action
-        const formData = new FormData(this);
-        formData.append('update_voucher', '1'); // controller expects this field for updates
-
-        const submitBtn = this.querySelector('button[type="submit"]');
-        
-        // Basic client-side validation to help user (server still authoritative)
-        const drLedger = formData.get('dr_ledger');
-        const crLedger = formData.get('cr_ledger');
-        const amount = parseFloat(formData.get('amount'));
-        const voucherType = formData.get('voucher_type');
-        const date = formData.get('date');
-        
-        if (!drLedger || !crLedger || !amount || amount <= 0 || !voucherType || !date) {
-            Swal.fire({
-                icon: 'error',
-                title: 'Validation Error',
-                text: 'Please fill all required fields with valid values.'
-            });
-            return;
-        }
-        
-        if (drLedger === crLedger) {
-            Swal.fire({
-                icon: 'error',
-                title: 'Validation Error',
-                text: 'Debit and Credit ledgers cannot be the same.'
-            });
-            return;
-        }
-
-        // Show saving state on submit button
-        if (submitBtn) {
-            submitBtn.disabled = true;
-            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Saving...';
-        }
-
-        // Send update request to controller; controller should return redirect or handle success
-        fetch(window.location.pathname, {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => {
-            if (response.redirected) {
-                // If controller issues Redirect, follow it
-                window.location.href = response.url;
-            } else {
-                // Otherwise reload with updated flag so flash message shows
-                window.location.href = window.location.pathname + '?updated=1';
+            
+            if (drLedger === crLedger) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Validation Error',
+                    text: 'Debit and Credit ledgers cannot be the same.'
+                });
+                return;
             }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            Swal.fire({
-                icon: 'error',
-                title: 'Submission Error',
-                text: 'Failed to update voucher: ' + error.message
-            });
-            // Reset submit button so user can retry
+
             if (submitBtn) {
-                submitBtn.disabled = false;
-                submitBtn.innerHTML = 'Save Changes';
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Saving...';
+            }
+
+            fetch(window.location.pathname, {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                if (response.redirected) {
+                    window.location.href = response.url;
+                } else {
+                    window.location.href = window.location.pathname + '?updated=1';
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Submission Error',
+                    text: 'Failed to update voucher: ' + error.message
+                });
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = 'Save Changes';
+                }
+            });
+        });
+
+        document.addEventListener('submitSuccess', function() {
+            if (currentEditModal) {
+                currentEditModal.hide();
             }
         });
     });
-
-    // Event used by other code to close modal after successful submission
-    document.addEventListener('submitSuccess', function() {
-        if (currentEditModal) {
-            currentEditModal.hide();
-        }
-    });
-
-    document.addEventListener('keydown', function (e) {
-        const active = document.activeElement;
-        const tag = active?.tagName;
-
-        // Don't trigger while typing
-        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || active?.isContentEditable) {
-            return;
-        }
-
-        // ALT + SHIFT + V  (Firefox-safe)
-        if (e.altKey && e.shiftKey && !e.ctrlKey && !e.metaKey && e.code === 'KeyV') {
-            e.preventDefault();
-
-            const modalEl = document.getElementById('addVoucherModal');
-            if (!modalEl) return;
-
-            bootstrap.Modal.getOrCreateInstance(modalEl).show();
-
-            setTimeout(() => {
-                modalEl.querySelector('input, select, textarea')?.focus();
-            }, 200);
-        }
-
-        // ALT + SHIFT + T  (Firefox-safe)
-        if (e.altKey && e.shiftKey && !e.ctrlKey && !e.metaKey && e.code === 'KeyT') {
-            e.preventDefault();
-            window.location.href = 'trial_balance.php';
-
-            setTimeout(() => {
-                modalEl.querySelector('input, select, textarea')?.focus();
-            }, 200);
-        }
-    });
-});
-</script>
+    </script>
 
 </body>
 </html>

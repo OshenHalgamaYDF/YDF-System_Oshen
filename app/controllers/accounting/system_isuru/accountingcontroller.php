@@ -1,16 +1,7 @@
 <?php
 // ============================================================================
 // accountingcontroller.php – FULLY COMMENTED VERSION WITH MULTI-COUNTRY SUPPORT
-// AND "ALL COUNTRIES" OPTION - FIXED TO SHOW GLOBAL VOUCHERS IN ALL COUNTRIES
-// ============================================================================
-// This file handles:
-//  • Adding ledgers
-//  • Adding vouchers (Dr/Cr)
-//  • Editing vouchers (AJAX-loaded form)
-//  • Updating vouchers with transactions
-//  • Deleting vouchers
-//  • Bank reconciliation (mark entries as cleared)
-//  • Fetching data for display
+// AND EXCHANGE RATE API INTEGRATION - FIXED RATE CALCULATIONS
 // ============================================================================
 
 session_start(); // Start session for country selection
@@ -63,15 +54,13 @@ if ($active_country_id == 0) {
 
 // ============================================================================
 // 2) AJAX ENDPOINT — LOAD VOUCHER FORM FOR EDITING
-//    (Frontend sends AJAX ?action=get_voucher&id=##)
 // ============================================================================
 if (isset($_GET['action']) && $_GET['action'] === 'get_voucher' && isset($_GET['id'])) {
 
-    $id = intval($_GET['id']); // Prevent SQL injection, convert to number
+    $id = intval($_GET['id']);
 
     // ------------------ Fetch Voucher Header ------------------
     if ($active_country_id == 0) {
-        // For All Countries, just fetch by ID
         $vstmt = $conn->prepare("
             SELECT voucher_id, voucher_type, date, narration, amount, currency_id, exchange_rate
             FROM vouchers
@@ -79,7 +68,6 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_voucher' && isset($_GET['
         ");
         $vstmt->bind_param("i", $id);
     } else {
-        // For specific country, include country filter (allow editing global vouchers too)
         $vstmt = $conn->prepare("
             SELECT voucher_id, voucher_type, date, narration, amount, currency_id, exchange_rate
             FROM vouchers
@@ -97,7 +85,6 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_voucher' && isset($_GET['
     }
 
     // ------------------ Fetch Dr/Cr Entries -------------------
-    // Expect exactly 2 entries (1 Dr, 1 Cr)
     $estmt = $conn->prepare("
         SELECT entry_id, ledger_id, type, amount
         FROM voucher_entries
@@ -109,7 +96,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_voucher' && isset($_GET['
     $entries = $estmt->get_result()->fetch_all(MYSQLI_ASSOC);
     $estmt->close();
 
-    // ------------------ Fetch Ledgers For Dropdowns (Global) ------------
+    // ------------------ Fetch Ledgers For Dropdowns ------------
     $ledgers_stmt = $conn->prepare("SELECT ledger_id, ledger_name FROM ledgers ORDER BY ledger_name ASC");
     $ledgers_stmt->execute();
     $ledgers_result = $ledgers_stmt->get_result();
@@ -124,10 +111,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_voucher' && isset($_GET['
     // ------------------ Return HTML (AJAX fragment) -------------
     ?>
     
-    <!-- Voucher Type, Date, Amount -->
     <div class="row mb-2">
-
-        <!-- Voucher Type -->
         <div class="col-md-4">
             <label>Voucher Type</label>
             <select name="voucher_type" class="form-select" required>
@@ -140,15 +124,11 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_voucher' && isset($_GET['
                 ?>
             </select>
         </div>
-
-        <!-- Date -->
         <div class="col-md-4">
             <label>Date</label>
             <input type="date" name="date" class="form-control"
                    value="<?= htmlspecialchars($voucher['date']) ?>" required>
         </div>
-
-        <!-- Amount -->
         <div class="col-md-4">
             <label>Amount <?= ($active_country_id == 0) ? '' : '(' . htmlspecialchars($active_country['currency_code']) . ')' ?></label>
             <input type="text" name="amount" id="editAmountInput" class="form-control"
@@ -157,7 +137,6 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_voucher' && isset($_GET['
         </div>
     </div>
 
-    <!-- Currency and Exchange Rate -->
     <div class="row mb-2">
         <div class="col-md-6">
             <label>Currency</label>
@@ -172,19 +151,17 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_voucher' && isset($_GET['
             </select>
         </div>
         <div class="col-md-6">
-            <label>Exchange Rate (to LKR)</label>
+            <label>Exchange Rate (1 FC = ? LKR)</label>
             <input type="number" name="exchange_rate" id="editExchangeRateInput" class="form-control" step="0.000001" value="<?= number_format((float)($voucher['exchange_rate'] ?? 1.0), 6, '.', '') ?>" readonly>
         </div>
     </div>
 
-    <!-- Debit Ledger -->
     <div class="row mb-2">
         <div class="col-md-6">
             <label>Debit Ledger (Dr)</label>
             <select name="dr_ledger" class="form-select" required>
                 <option value="">-- Select --</option>
                 <?php
-                // Pick selected Dr entry ledger
                 $dr_id = null;
                 foreach ($entries as $e) if ($e['type'] === 'Dr') $dr_id = $e['ledger_id'];
 
@@ -195,8 +172,6 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_voucher' && isset($_GET['
                 ?>
             </select>
         </div>
-
-        <!-- Credit Ledger -->
         <div class="col-md-6">
             <label>Credit Ledger (Cr)</label>
             <select name="cr_ledger" class="form-select" required>
@@ -214,27 +189,23 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_voucher' && isset($_GET['
         </div>
     </div>
 
-    <!-- Narration -->
     <div class="mb-3">
         <label>Narration</label>
         <textarea name="narration" class="form-control" rows="2"><?= htmlspecialchars($voucher['narration']) ?></textarea>
     </div>
 
-    <!-- Hidden Voucher ID -->
     <input type="hidden" name="voucher_id" value="<?= $voucher['voucher_id'] ?>">
 
-    <!-- Hidden Entry IDs (Dr, Cr) -->
     <?php
     foreach ($entries as $e) {
         echo "<input type='hidden' name='entry_id_map[{$e['type']}]' value='{$e['entry_id']}'>";
     }
-    exit; // Must exit so the rest of page does not load
+    exit;
 }
 
 
 // ============================================================================
-// AJAX: GET LEDGERS (Global - not filtered by Country)
-// Clients can call ?action=get_ledgers to receive JSON list of ledgers
+// AJAX: GET LEDGERS
 // ============================================================================
 if (isset($_GET['action']) && $_GET['action'] === 'get_ledgers') {
     $ledgers = [];
@@ -251,7 +222,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_ledgers') {
 }
 
 // ============================================================================
-// AJAX: GET EXCHANGE RATE
+// AJAX: GET EXCHANGE RATE - FIXED: Now returns LKR per foreign currency
 // ============================================================================
 if (isset($_GET['action']) && $_GET['action'] === 'get_rate' && isset($_GET['code'])) {
     $code = $_GET['code'];
@@ -271,7 +242,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_rate' && isset($_GET['cod
 
 
 // ============================================================================
-// 3) ADD LEDGER (Filtered by Country)
+// 3) ADD LEDGER
 // ============================================================================
 if (isset($_POST['add_ledger'])) {
 
@@ -292,7 +263,6 @@ if (isset($_POST['add_ledger'])) {
             INSERT INTO ledgers (ledger_name, opening_balance, balance_type, group_id, country_id)
             VALUES (?, ?, ?, ?, ?)
         ");
-        // Keep country_id for data separation when viewing
         $stmt->bind_param("sdsii", $ledger_name, $opening_balance, $balance_type, $group_id, $active_country_id);
         $stmt->execute();
         $newId = $conn->insert_id;
@@ -308,7 +278,7 @@ if (isset($_POST['add_ledger'])) {
 
 
 // ============================================================================
-// 4) ADD VOUCHER (Insert Dr & Cr Entries) - FIXED: Save country_id=0 for All Countries
+// 4) ADD VOUCHER
 // ============================================================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_voucher'])) {
 
@@ -321,13 +291,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_voucher'])) {
     $currency_id  = intval($_POST['currency_id'] ?? 1);
     $exchange_rate = floatval($_POST['exchange_rate'] ?? 1.0);
 
-    // Basic validation
     if ($dr_ledger <= 0 || $cr_ledger <= 0 || $amount <= 0) {
         header("Location: ?error=invalid_input");
         exit;
     }
 
-    // Validate ledgers exist (no country check needed - ledgers are global)
     $ledger_check_stmt = $conn->prepare("SELECT COUNT(*) as count FROM ledgers WHERE ledger_id IN (?, ?)");
     $ledger_check_stmt->bind_param("ii", $dr_ledger, $cr_ledger);
     $ledger_check_stmt->execute();
@@ -338,13 +306,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_voucher'])) {
         exit;
     }
 
-    // Compute LKR equivalent
     $amount_lkr = round($amount * $exchange_rate, 2);
-
-    // FIX: Use 0 for country_id when "All Countries" is selected, otherwise use the specific country_id
     $country_id_to_save = ($active_country_id == 0) ? 0 : $active_country_id;
 
-    // Insert voucher header with country_id
     $stmt = $conn->prepare("
         INSERT INTO vouchers (voucher_type, date, narration, currency_id, exchange_rate, country_id, created_at)
         VALUES (?, ?, ?, ?, ?, ?, NOW())
@@ -353,7 +317,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_voucher'])) {
     $stmt->execute();
     $voucher_id = $conn->insert_id;
 
-    // Insert Debit entry
     $stmt2 = $conn->prepare("
         INSERT INTO voucher_entries (voucher_id, ledger_id, type, amount, amount_lkr)
         VALUES (?, ?, 'Dr', ?, ?)
@@ -361,7 +324,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_voucher'])) {
     $stmt2->bind_param("iidd", $voucher_id, $dr_ledger, $amount, $amount_lkr);
     $stmt2->execute();
 
-    // Insert Credit entry
     $stmt3 = $conn->prepare("
         INSERT INTO voucher_entries (voucher_id, ledger_id, type, amount, amount_lkr)
         VALUES (?, ?, 'Cr', ?, ?)
@@ -375,11 +337,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_voucher'])) {
 
 
 // ============================================================================
-// 5) UPDATE EXISTING VOUCHER (WITH TRANSACTION) - FIXED: Handle global vouchers
+// 5) UPDATE EXISTING VOUCHER
 // ============================================================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_voucher'])) {
 
-    // Collect posted data
     $id           = intval($_POST['voucher_id'] ?? 0);
     $voucher_type = $_POST['voucher_type'] ?? '';
     $date         = $_POST['date'] ?? date('Y-m-d');
@@ -391,13 +352,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_voucher'])) {
     $exchange_rate = floatval($_POST['exchange_rate'] ?? 1.0);
     $entry_map    = $_POST['entry_id_map'] ?? [];
 
-    // Basic validation
     if ($id <= 0) {
         header("Location: ?error=bad_id");
         exit;
     }
 
-    // Validate ledgers exist (no country check needed - ledgers are global)
     $ledger_check_stmt = $conn->prepare("SELECT COUNT(*) as count FROM ledgers WHERE ledger_id IN (?, ?)");
     $ledger_check_stmt->bind_param("ii", $dr_ledger, $cr_ledger);
     $ledger_check_stmt->execute();
@@ -408,7 +367,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_voucher'])) {
         exit;
     }
 
-    // Compute LKR equivalent
     $amount_lkr = round($amount * $exchange_rate, 2);
 
     if ($dr_ledger === $cr_ledger) {
@@ -416,13 +374,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_voucher'])) {
         exit;
     }
 
-    // Begin transaction (so updates happen together)
     $conn->begin_transaction();
 
     try {
-        //------------------ Update Voucher Header ------------------
         if ($active_country_id == 0) {
-            // For All Countries, just update by ID (keep original country_id)
             $ustmt = $conn->prepare("
                 UPDATE vouchers
                 SET voucher_type = ?, date = ?, narration = ?, currency_id = ?, exchange_rate = ?
@@ -430,7 +385,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_voucher'])) {
             ");
             $ustmt->bind_param("sssidi", $voucher_type, $date, $narration, $currency_id, $exchange_rate, $id);
         } else {
-            // For specific country, include country filter but also allow updating global (0) vouchers
             $ustmt = $conn->prepare("
                 UPDATE vouchers
                 SET voucher_type = ?, date = ?, narration = ?, currency_id = ?, exchange_rate = ?
@@ -441,10 +395,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_voucher'])) {
         $ustmt->execute();
         $ustmt->close();
 
-
-        //------------------ Update Debit Entry ------------------
         if (isset($entry_map['Dr']) && intval($entry_map['Dr']) > 0) {
-
             $eid = intval($entry_map['Dr']);
             $estmt = $conn->prepare("
                 UPDATE voucher_entries
@@ -454,9 +405,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_voucher'])) {
             $estmt->bind_param("iddi", $dr_ledger, $amount, $amount_lkr, $eid);
             $estmt->execute();
             $estmt->close();
-
         } else {
-            // Insert if missing
             $ist = $conn->prepare("
                 INSERT INTO voucher_entries (voucher_id, ledger_id, type, amount, amount_lkr)
                 VALUES (?, ?, 'Dr', ?, ?)
@@ -466,10 +415,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_voucher'])) {
             $ist->close();
         }
 
-
-        //------------------ Update Credit Entry ------------------
         if (isset($entry_map['Cr']) && intval($entry_map['Cr']) > 0) {
-
             $eid = intval($entry_map['Cr']);
             $estmt = $conn->prepare("
                 UPDATE voucher_entries
@@ -479,9 +425,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_voucher'])) {
             $estmt->bind_param("iddi", $cr_ledger, $amount, $amount_lkr, $eid);
             $estmt->execute();
             $estmt->close();
-
         } else {
-            // Insert if missing
             $ist = $conn->prepare("
                 INSERT INTO voucher_entries (voucher_id, ledger_id, type, amount, amount_lkr)
                 VALUES (?, ?, 'Cr', ?, ?)
@@ -491,16 +435,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_voucher'])) {
             $ist->close();
         }
 
-        // Commit transaction
         $conn->commit();
-
         header("Location: ?updated=1");
         exit;
 
     } catch (Exception $e) {
-        // Rollback if anything fails
         $conn->rollback();
-
         header("Location: ?error=update_failed&message=" . urlencode($e->getMessage()));
         exit;
     }
@@ -508,7 +448,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_voucher'])) {
 
 
 // ============================================================================
-// 6) BANK RECONCILIATION — AJAX UPDATE
+// 6) BANK RECONCILIATION
 // ============================================================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_brs'])) {
 
@@ -516,8 +456,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_brs'])) {
     $is_cleared = intval($_POST['is_cleared'] ?? 0);
 
     if ($entry_id > 0) {
-
-        // Check existing reconciliation
         $check = $conn->query("
             SELECT reconciliation_id
             FROM bank_reconciliation
@@ -527,7 +465,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_brs'])) {
         $cleared_date = $is_cleared ? date('Y-m-d') : NULL;
 
         if ($check->num_rows > 0) {
-            // Update existing
             $query = "
                 UPDATE bank_reconciliation
                 SET is_cleared = $is_cleared,
@@ -535,9 +472,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_brs'])) {
                 WHERE voucher_entry_id = $entry_id
             ";
             $conn->query($query);
-
         } else {
-            // Insert new
             $query = "
                 INSERT INTO bank_reconciliation (voucher_entry_id, is_cleared, cleared_date)
                 VALUES ($entry_id, $is_cleared, " . ($cleared_date ? "'$cleared_date'" : "NULL") . ")
@@ -554,7 +489,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_brs'])) {
 
 
 // ============================================================================
-// 7) DELETE VOUCHER (AND ITS ENTRIES) - FIXED: Allow deleting global vouchers
+// 7) DELETE VOUCHER
 // ============================================================================
 if (isset($_POST['delete_voucher'])) {
 
@@ -565,19 +500,15 @@ if (isset($_POST['delete_voucher'])) {
         $conn->begin_transaction();
 
         try {
-            // Delete child entries
             $stmt = $conn->prepare("DELETE FROM voucher_entries WHERE voucher_id = ?");
             $stmt->bind_param("i", $voucher_id);
             $stmt->execute();
             $stmt->close();
 
-            // Delete parent voucher - with or without country filter
             if ($active_country_id == 0) {
-                // For All Countries, just delete by ID (no country check)
                 $stmt2 = $conn->prepare("DELETE FROM vouchers WHERE voucher_id = ?");
                 $stmt2->bind_param("i", $voucher_id);
             } else {
-                // For specific country, include country check (allow deleting global ones too)
                 $stmt2 = $conn->prepare("DELETE FROM vouchers WHERE voucher_id = ? AND (country_id = ? OR country_id = 0)");
                 $stmt2->bind_param("ii", $voucher_id, $active_country_id);
             }
@@ -585,7 +516,6 @@ if (isset($_POST['delete_voucher'])) {
             $stmt2->close();
 
             $conn->commit();
-
             header("Location: ?deleted=1");
             exit;
 
@@ -602,10 +532,9 @@ if (isset($_POST['delete_voucher'])) {
 }
 
 // ============================================================================
-// 8) FETCH DATA FOR FRONTEND TABLES - FIXED: Show global vouchers in all countries
+// 8) FETCH DATA FOR FRONTEND TABLES
 // ============================================================================
 
-// Helper function to clear any pending results
 function clearStoredResults($conn) {
     while ($conn->next_result()) {
         if ($result = $conn->store_result()) {
@@ -614,7 +543,7 @@ function clearStoredResults($conn) {
     }
 }
 
-// Fetch ledgers list (global - not filtered by country)
+// Fetch ledgers list
 $ledgers_stmt = $conn->prepare("
     SELECT ledger_id, ledger_name
     FROM ledgers
@@ -623,11 +552,10 @@ $ledgers_stmt = $conn->prepare("
 $ledgers_stmt->execute();
 $ledgers = $ledgers_stmt->get_result();
 $ledgers_stmt->close();
-clearStoredResults($conn); // Clear any pending results
+clearStoredResults($conn);
 
-// Fetch vouchers with entries combined - FIXED: Include global vouchers (country_id=0) in all country views
+// Fetch vouchers with entries combined
 if ($active_country_id == 0) {
-    // Show all countries (including global vouchers)
     $vouchers_stmt = $conn->prepare("
         SELECT v.voucher_id, v.voucher_type, v.date, v.narration, 
                COALESCE(c.country_name, 'All Countries') AS country_name,
@@ -642,7 +570,6 @@ if ($active_country_id == 0) {
     ");
     $vouchers_stmt->execute();
 } else {
-    // Show specific country - FIX: Include both country-specific AND global (country_id = 0) vouchers
     $vouchers_stmt = $conn->prepare("
         SELECT v.voucher_id, v.voucher_type, v.date, v.narration, 
                COALESCE(c.country_name, 'All Countries') AS country_name,
@@ -661,11 +588,10 @@ if ($active_country_id == 0) {
 $vouchers_stmt->execute();
 $vouchers = $vouchers_stmt->get_result();
 $vouchers_stmt->close();
-clearStoredResults($conn); // Clear any pending results
+clearStoredResults($conn);
 
-// Fetch ledger balances using Opening + Dr - Cr (with group info)
+// Fetch ledger balances
 if ($active_country_id == 0) {
-    // Show all countries
     $balances_stmt = $conn->prepare("
         SELECT 
             l.ledger_id,
@@ -676,10 +602,8 @@ if ($active_country_id == 0) {
             ag.group_type,
             ag.sub_type,
             c.country_name,
-
             COALESCE(SUM(CASE WHEN ve.type='Dr' THEN ve.amount_lkr ELSE 0 END), 0) AS total_dr,
             COALESCE(SUM(CASE WHEN ve.type='Cr' THEN ve.amount_lkr ELSE 0 END), 0) AS total_cr,
-
             (
               (CASE WHEN UPPER(l.balance_type)='DR'
                     THEN l.opening_balance
@@ -687,7 +611,6 @@ if ($active_country_id == 0) {
               + COALESCE(SUM(CASE WHEN ve.type='Dr' THEN ve.amount_lkr ELSE 0 END), 0)
               - COALESCE(SUM(CASE WHEN ve.type='Cr' THEN ve.amount_lkr ELSE 0 END), 0)
             ) AS net_balance
-
         FROM ledgers l
         JOIN account_groups ag ON l.group_id = ag.group_id
         JOIN countries c ON l.country_id = c.id
@@ -697,7 +620,6 @@ if ($active_country_id == 0) {
         ORDER BY c.country_name, ag.group_type, ag.sub_type, l.ledger_name
     ");
 } else {
-    // Show specific country
     $balances_stmt = $conn->prepare("
         SELECT 
             l.ledger_id,
@@ -708,10 +630,8 @@ if ($active_country_id == 0) {
             ag.group_type,
             ag.sub_type,
             c.country_name,
-
             COALESCE(SUM(CASE WHEN ve.type='Dr' THEN ve.amount_lkr ELSE 0 END), 0) AS total_dr,
             COALESCE(SUM(CASE WHEN ve.type='Cr' THEN ve.amount_lkr ELSE 0 END), 0) AS total_cr,
-
             (
               (CASE WHEN UPPER(l.balance_type)='DR'
                     THEN l.opening_balance
@@ -719,7 +639,6 @@ if ($active_country_id == 0) {
               + COALESCE(SUM(CASE WHEN ve.type='Dr' THEN ve.amount_lkr ELSE 0 END), 0)
               - COALESCE(SUM(CASE WHEN ve.type='Cr' THEN ve.amount_lkr ELSE 0 END), 0)
             ) AS net_balance
-
         FROM ledgers l
         JOIN account_groups ag ON l.group_id = ag.group_id
         JOIN countries c ON l.country_id = c.id
@@ -734,7 +653,7 @@ if ($active_country_id == 0) {
 $balances_stmt->execute();
 $balances = $balances_stmt->get_result();
 $balances_stmt->close();
-clearStoredResults($conn); // Clear any pending results
+clearStoredResults($conn);
 
 // ============================================================================
 // 9) GET EXCHANGE RATE (AJAX)
@@ -742,8 +661,6 @@ clearStoredResults($conn); // Clear any pending results
 if (isset($_GET['action']) && $_GET['action'] === 'get_rate' && isset($_GET['code'])) {
     $code = $_GET['code'];
     $date = $_GET['date'] ?? date('Y-m-d');
-    // Find currency_id by code and pick most recent rate <= $date
-    // Return json: { rate: 35.48 }
     header('Content-Type: application/json');
     $stmt = $conn->prepare("SELECT rate_to_lkr FROM exchange_rates er JOIN currencies c ON er.currency_id=c.currency_id WHERE c.code=? AND er.rate_date<=? ORDER BY er.rate_date DESC LIMIT 1");
     $stmt->bind_param("ss", $code, $date);
@@ -751,30 +668,81 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_rate' && isset($_GET['cod
     $result = $stmt->get_result();
     $row = $result->fetch_assoc();
     $stmt->close();
-    clearStoredResults($conn); // Clear any pending results
+    clearStoredResults($conn);
     echo json_encode(['rate' => $row['rate_to_lkr'] ?? null]);
     exit;
 }
 
 // ============================================================================
-// 10) GET CASH PROFIT DATA FOR GRAPH (WITH DATE RANGE SUPPORT) - FIXED: Include global vouchers
+// NEW: AJAX: GET CURRENCY ID BY CODE
+// ============================================================================
+if (isset($_GET['action']) && $_GET['action'] === 'get_currency_id' && isset($_GET['code'])) {
+    $code = $_GET['code'];
+    $stmt = $conn->prepare("SELECT currency_id FROM currencies WHERE code = ?");
+    $stmt->bind_param("s", $code);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    if ($row = $result->fetch_assoc()) {
+        echo json_encode(['currency_id' => $row['currency_id']]);
+    } else {
+        echo json_encode(['currency_id' => null]);
+    }
+    $stmt->close();
+    exit;
+}
+
+// ============================================================================
+// NEW: UPDATE EXCHANGE RATE (POST)
+// ============================================================================
+if (isset($_POST['update_exchange_rate'])) {
+    $currency_id = intval($_POST['currency_id']);
+    $rate_date = $_POST['rate_date'];
+    $rate_to_lkr = floatval($_POST['rate_to_lkr']);
+    $source = $_POST['source'] ?? 'API';
+    
+    // Check if rate for this currency and date already exists
+    $check_stmt = $conn->prepare("SELECT rate_id FROM exchange_rates WHERE currency_id = ? AND rate_date = ?");
+    $check_stmt->bind_param("is", $currency_id, $rate_date);
+    $check_stmt->execute();
+    $check_result = $check_stmt->get_result();
+    
+    if ($check_result->num_rows > 0) {
+        // Update existing rate
+        $update_stmt = $conn->prepare("UPDATE exchange_rates SET rate_to_lkr = ?, source = ? WHERE currency_id = ? AND rate_date = ?");
+        $update_stmt->bind_param("dsis", $rate_to_lkr, $source, $currency_id, $rate_date);
+        $success = $update_stmt->execute();
+        $update_stmt->close();
+    } else {
+        // Insert new rate
+        $insert_stmt = $conn->prepare("INSERT INTO exchange_rates (currency_id, rate_date, rate_to_lkr, source) VALUES (?, ?, ?, ?)");
+        $insert_stmt->bind_param("isds", $currency_id, $rate_date, $rate_to_lkr, $source);
+        $success = $insert_stmt->execute();
+        $insert_stmt->close();
+    }
+    
+    $check_stmt->close();
+    
+    header('Content-Type: application/json');
+    echo json_encode(['success' => $success]);
+    exit;
+}
+
+// ============================================================================
+// 10) GET CASH PROFIT DATA FOR GRAPH
 // ============================================================================
 if (isset($_GET['action']) && $_GET['action'] === 'get_cash_profit') {
     
-    // Get date range from request, default to last 7 days
     $start_date = isset($_GET['start_date']) ? $_GET['start_date'] : date('Y-m-d', strtotime('-6 days'));
     $end_date = isset($_GET['end_date']) ? $_GET['end_date'] : date('Y-m-d');
     
-    // Validate dates
     if (!strtotime($start_date) || !strtotime($end_date)) {
         header('Content-Type: application/json');
         echo json_encode(['success' => false, 'message' => 'Invalid date format']);
         exit;
     }
     
-    // Get cash transactions (Payment and Receipt vouchers) within date range
     if ($active_country_id == 0) {
-        // All countries (including global vouchers)
         $stmt = $conn->prepare("
             SELECT 
                 DATE(v.date) as trans_date,
@@ -789,7 +757,6 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_cash_profit') {
         ");
         $stmt->bind_param("ss", $start_date, $end_date);
     } else {
-        // Specific country - FIX: Include both country-specific AND global (country_id = 0) vouchers
         $stmt = $conn->prepare("
             SELECT 
                 DATE(v.date) as trans_date,
@@ -809,20 +776,17 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_cash_profit') {
     $stmt->execute();
     $result = $stmt->get_result();
     
-    // Calculate date range
     $start = new DateTime($start_date);
     $end = new DateTime($end_date);
     $interval = new DateInterval('P1D');
     $dateRange = new DatePeriod($start, $interval, $end->modify('+1 day'));
     
-    // Initialize arrays
     $dates = [];
     $cashIn = [];
     $cashOut = [];
     $netProfit = [];
     $totals = ['total_in' => 0, 'total_out' => 0, 'net_profit' => 0];
     
-    // Initialize daily totals
     foreach ($dateRange as $date) {
         $dateKey = $date->format('Y-m-d');
         $dates[] = $date->format('M d');
@@ -830,7 +794,6 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_cash_profit') {
         $cashOut[$dateKey] = 0;
     }
     
-    // Fill in actual data
     while ($row = $result->fetch_assoc()) {
         $date = $row['trans_date'];
         if (array_key_exists($date, $cashIn)) {
@@ -846,9 +809,8 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_cash_profit') {
     
     $result->free();
     $stmt->close();
-    clearStoredResults($conn); // Clear any pending results
+    clearStoredResults($conn);
     
-    // Prepare final arrays
     $cashInValues = [];
     $cashOutValues = [];
     $netProfitValues = [];
