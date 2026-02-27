@@ -572,7 +572,7 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\system_isur
     currencySelect.addEventListener('change', () => { updateConversion().catch(console.error); });
     dateInput.addEventListener('change', () => { updateConversion().catch(console.error); });
 
-    // ========== FIXED: Exchange Rate Update Functions ==========
+    // ========== UPDATED: Exchange Rate Update Functions with Previous Day Deletion ==========
     // Fetch and update exchange rates from API
     function fetchAndUpdateRates() {
         // Show loading state
@@ -606,8 +606,12 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\system_isur
                 Swal.fire({
                     icon: 'success',
                     title: 'Success!',
-                    text: `Updated ${result.updated} exchange rates successfully.`,
-                    timer: 3000
+                    html: `
+                        <p>Updated ${result.updated} exchange rates successfully.</p>
+                        <p class="text-muted small">Previous day's rates were automatically replaced.</p>
+                        ${result.failed > 0 ? `<p class="text-warning">${result.failed} currencies failed to update.</p>` : ''}
+                    `,
+                    timer: 4000
                 });
             })
             .catch(error => {
@@ -625,7 +629,7 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\system_isur
             });
     }
 
-    // Store exchange rates in database
+    // Store exchange rates in database with previous day deletion
     async function storeExchangeRates(apiData) {
         const rates = apiData.conversion_rates;
         const rateDate = new Date().toISOString().split('T')[0]; // Today's date
@@ -640,11 +644,20 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\system_isur
         console.log(`Base LKR rate: 1 USD = ${lkrRate} LKR`);
         
         // Prepare data for all currencies we want to store
-        // We'll store how many LKR per unit of foreign currency
         const currenciesToStore = ['USD', 'EUR', 'GBP', 'JPY', 'AUD', 'CAD', 'CHF', 'CNY', 'INR'];
         const updatedRates = [];
+        const failedRates = [];
+        const deletedPrevious = [];
         
-        for (const currencyCode of currenciesToStore) {
+        // Show progress
+        Swal.update({
+            title: 'Updating Rates',
+            html: `Processing 0/${currenciesToStore.length} currencies...<br><small>Deleting previous day's rates...</small>`
+        });
+        
+        for (let i = 0; i < currenciesToStore.length; i++) {
+            const currencyCode = currenciesToStore[i];
+            
             if (rates[currencyCode]) {
                 try {
                     // Get currency_id from currencies table
@@ -653,10 +666,9 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\system_isur
                     
                     if (currencyData.currency_id) {
                         // Calculate LKR per unit of foreign currency
-                        // If 1 USD = 309 LKR, and 1 USD = 0.85 EUR, then 1 EUR = 309/0.85 = 363.53 LKR
                         const rateToLkr = lkrRate / rates[currencyCode];
                         
-                        // Store the rate
+                        // Store the rate (the PHP endpoint now handles deletion of previous day)
                         const storeResponse = await fetch(window.location.pathname, {
                             method: 'POST',
                             headers: {
@@ -674,16 +686,34 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\system_isur
                         const result = await storeResponse.json();
                         if (result.success) {
                             updatedRates.push(currencyCode);
-                            console.log(`Stored ${currencyCode}: 1 ${currencyCode} = ${rateToLkr.toFixed(2)} LKR (from USD rate: ${rates[currencyCode]})`);
+                            if (result.deleted_previous) {
+                                deletedPrevious.push(currencyCode);
+                            }
+                            console.log(`Stored ${currencyCode}: 1 ${currencyCode} = ${rateToLkr.toFixed(2)} LKR ${result.deleted_previous ? '(previous day deleted)' : ''}`);
+                        } else {
+                            failedRates.push(currencyCode);
                         }
                     }
                 } catch (error) {
                     console.error(`Failed to update ${currencyCode}:`, error);
+                    failedRates.push(currencyCode);
                 }
             }
+            
+            // Update progress
+            Swal.update({
+                title: 'Updating Rates',
+                html: `Processed ${i + 1}/${currenciesToStore.length} currencies...<br>
+                      <small>Updated: ${updatedRates.length} | Failed: ${failedRates.length} | Previous day deleted: ${deletedPrevious.length}</small>`
+            });
         }
         
-        return { updated: updatedRates.length };
+        return { 
+            updated: updatedRates.length,
+            failed: failedRates.length,
+            deleted: deletedPrevious.length,
+            currencies: updatedRates
+        };
     }
     </script>
 

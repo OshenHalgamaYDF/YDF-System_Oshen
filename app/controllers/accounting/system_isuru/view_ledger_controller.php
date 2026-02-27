@@ -4,6 +4,11 @@
 // ========================================
 session_start(); // Start session for country selection
 
+// Enable error reporting for debugging (remove in production)
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+
 $servername = "localhost";
 $username   = "root";
 $password   = "";
@@ -18,21 +23,65 @@ if ($conn->connect_error) {
 $conn->set_charset('utf8mb4');
 
 // ============================================================================
-// COUNTRY SELECTION HANDLING
+// COUNTRY SELECTION HANDLING - FIXED
 // ============================================================================
-if (!isset($_SESSION['country_id'])) {
-    $default_country = $conn->query("SELECT id FROM countries ORDER BY id ASC LIMIT 1")->fetch_assoc();
-    $_SESSION['country_id'] = $default_country ? $default_country['id'] : 1;
+
+// First, check if countries table exists and has records
+$countries_exist = false;
+$default_country_id = 1; // Default fallback
+
+$table_check = $conn->query("SHOW TABLES LIKE 'countries'");
+if ($table_check && $table_check->num_rows > 0) {
+    $count_result = $conn->query("SELECT COUNT(*) as count FROM countries");
+    if ($count_result) {
+        $count = $count_result->fetch_assoc()['count'];
+        $countries_exist = ($count > 0);
+        
+        if ($countries_exist) {
+            // Get the first country ID as default
+            $first_country = $conn->query("SELECT id FROM countries ORDER BY id ASC LIMIT 1");
+            if ($first_country && $first_country->num_rows > 0) {
+                $default_country_id = $first_country->fetch_assoc()['id'];
+            }
+        }
+    }
+}
+
+// Set session country_id if not set or if it's 0/invalid
+if (!isset($_SESSION['country_id']) || $_SESSION['country_id'] <= 0) {
+    $_SESSION['country_id'] = $default_country_id;
 }
 
 $active_country_id = $_SESSION['country_id'];
 
-// Fetch active country details
-$country_stmt = $conn->prepare("SELECT country_name, currency_code FROM countries WHERE id = ?");
-$country_stmt->bind_param("i", $active_country_id);
-$country_stmt->execute();
-$active_country = $country_stmt->get_result()->fetch_assoc();
-$country_stmt->close();
+// Fetch active country details with error handling
+$active_country = ['country_name' => 'N/A', 'currency_code' => 'N/A']; // Default values
+
+if ($countries_exist) {
+    $country_stmt = $conn->prepare("SELECT country_name, currency_code FROM countries WHERE id = ?");
+    if ($country_stmt) {
+        $country_stmt->bind_param("i", $active_country_id);
+        $country_stmt->execute();
+        $result = $country_stmt->get_result();
+        if ($result && $result->num_rows > 0) {
+            $active_country = $result->fetch_assoc();
+        } else {
+            // If the country_id doesn't exist, reset to default
+            $_SESSION['country_id'] = $default_country_id;
+            $active_country_id = $default_country_id;
+            
+            // Try again with default
+            $country_stmt = $conn->prepare("SELECT country_name, currency_code FROM countries WHERE id = ?");
+            $country_stmt->bind_param("i", $active_country_id);
+            $country_stmt->execute();
+            $result = $country_stmt->get_result();
+            if ($result && $result->num_rows > 0) {
+                $active_country = $result->fetch_assoc();
+            }
+        }
+        $country_stmt->close();
+    }
+}
 
 // --- Helper: validate date ---
 function valid_date($d) {
@@ -83,6 +132,7 @@ if ($ledgerIdParam && isset($_GET['export']) && $_GET['export'] === 'excel') {
     $safeName = preg_replace('/[^a-z0-9_\-]/i','_', $ledger_name ?: 'ledger_'.$id);
     $filename = "ledger_{$safeName}_" . $filter_from . "_to_" . $filter_to . ".csv";
     header('Content-Disposition: attachment; filename="'.$filename.'"');
+    header('Content-Type: text/csv; charset=utf-8');
 
     echo "\xEF\xBB\xBF";
     $out = fopen('php://output', 'w');
@@ -173,6 +223,7 @@ if ($ledgerIdParam) {
     $q = $tstmt->get_result();
     $totalDr = 0.0;
     $totalCr = 0.0;
+    $running_balance = ($balance_type === 'DR') ? $opening_balance : -$opening_balance;
 
     ob_start();
     ?>
@@ -210,7 +261,9 @@ if ($ledgerIdParam) {
                         </tr>
                     </thead>
                 <tbody>
-                    <?php while ($r = $q->fetch_assoc()):
+                    <?php 
+                    $q->data_seek(0); // Reset pointer to beginning
+                    while ($r = $q->fetch_assoc()):
                         if ($r['type'] === 'Dr') {
                             $totalDr += (float)$r['amount'];
                             $running_balance += (float)$r['amount'];
@@ -256,9 +309,31 @@ if ($ledgerIdParam) {
 }
 
 // ---------- Full page ----------
-$ledgers_stmt = $conn->prepare("SELECT ledger_id, ledger_name FROM ledgers WHERE country_id = ? ORDER BY ledger_name ASC");
-$ledgers_stmt->bind_param("i", $active_country_id);
-$ledgers_stmt->execute();
-$ledgers = $ledgers_stmt->get_result();
-$ledgers_stmt->close();
+// Check if ledgers table exists
+$ledgers_exist = false;
+$table_check = $conn->query("SHOW TABLES LIKE 'ledgers'");
+if ($table_check && $table_check->num_rows > 0) {
+    $ledgers_exist = true;
+}
+
+// Get ledgers for the active country
+$ledgers = null;
+if ($ledgers_exist) {
+    $ledgers_stmt = $conn->prepare("SELECT ledger_id, ledger_name FROM ledgers WHERE country_id = ? ORDER BY ledger_name ASC");
+    if ($ledgers_stmt) {
+        $ledgers_stmt->bind_param("i", $active_country_id);
+        $ledgers_stmt->execute();
+        $ledgers = $ledgers_stmt->get_result();
+        $ledgers_stmt->close();
+    }
+}
+
+// Debug info
+$debug_info = [
+    'active_country_id' => $active_country_id,
+    'countries_exist' => $countries_exist ? 'Yes' : 'No',
+    'ledgers_exist' => $ledgers_exist ? 'Yes' : 'No',
+    'ledgers_found' => ($ledgers && $ledgers->num_rows > 0) ? $ledgers->num_rows : 0,
+    'default_country_id' => $default_country_id
+];
 ?>

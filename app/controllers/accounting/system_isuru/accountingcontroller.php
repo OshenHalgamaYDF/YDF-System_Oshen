@@ -23,6 +23,7 @@ if ($conn->connect_error) {
 }
 
 $conn->set_charset('utf8mb4'); // Always use UTF-8 for safety
+$conn->begin_transaction(); // Start transaction for multiple operations
 
 // ============================================================================
 // COUNTRY SELECTION HANDLING (with All Countries option)
@@ -51,25 +52,25 @@ if ($active_country_id == 0) {
     $active_country = $country_stmt->get_result()->fetch_assoc();
     $country_stmt->close();
 }
-
 // ============================================================================
-// 2) AJAX ENDPOINT — LOAD VOUCHER FORM FOR EDITING
+// 2) AJAX ENDPOINT — LOAD VOUCHER FORM FOR EDITING - FIXED
 // ============================================================================
 if (isset($_GET['action']) && $_GET['action'] === 'get_voucher' && isset($_GET['id'])) {
 
     $id = intval($_GET['id']);
 
     // ------------------ Fetch Voucher Header ------------------
+    // REMOVED 'amount' from the SELECT - it doesn't exist in vouchers table
     if ($active_country_id == 0) {
         $vstmt = $conn->prepare("
-            SELECT voucher_id, voucher_type, date, narration, amount, currency_id, exchange_rate
+            SELECT voucher_id, voucher_type, date, narration, currency_id, exchange_rate
             FROM vouchers
             WHERE voucher_id = ?
         ");
         $vstmt->bind_param("i", $id);
     } else {
         $vstmt = $conn->prepare("
-            SELECT voucher_id, voucher_type, date, narration, amount, currency_id, exchange_rate
+            SELECT voucher_id, voucher_type, date, narration, currency_id, exchange_rate
             FROM vouchers
             WHERE voucher_id = ? AND (country_id = ? OR country_id = 0)
         ");
@@ -86,7 +87,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_voucher' && isset($_GET['
 
     // ------------------ Fetch Dr/Cr Entries -------------------
     $estmt = $conn->prepare("
-        SELECT entry_id, ledger_id, type, amount
+        SELECT entry_id, ledger_id, type, amount, amount_lkr
         FROM voucher_entries
         WHERE voucher_id = ?
         ORDER BY FIELD(type, 'Dr', 'Cr')
@@ -95,6 +96,13 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_voucher' && isset($_GET['
     $estmt->execute();
     $entries = $estmt->get_result()->fetch_all(MYSQLI_ASSOC);
     $estmt->close();
+
+    // Get the amount from the first entry (Dr or Cr)
+    $voucher_amount = 0;
+    foreach ($entries as $e) {
+        $voucher_amount = floatval($e['amount']);
+        break; // Take the first one since Dr and Cr amounts should be equal
+    }
 
     // ------------------ Fetch Ledgers For Dropdowns ------------
     $ledgers_stmt = $conn->prepare("SELECT ledger_id, ledger_name FROM ledgers ORDER BY ledger_name ASC");
@@ -133,7 +141,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_voucher' && isset($_GET['
             <label>Amount <?= ($active_country_id == 0) ? '' : '(' . htmlspecialchars($active_country['currency_code']) . ')' ?></label>
             <input type="text" name="amount" id="editAmountInput" class="form-control"
                    required placeholder="e.g., $100 or 100"
-                   value="<?= number_format((float)($voucher['amount'] ?? 0), 2, '.', '') ?>">
+                   value="<?= number_format($voucher_amount, 2, '.', '') ?>">
         </div>
     </div>
 
@@ -693,7 +701,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_currency_id' && isset($_G
 }
 
 // ============================================================================
-// NEW: UPDATE EXCHANGE RATE (POST)
+// UPDATED: UPDATE EXCHANGE RATE (POST) - WITH PREVIOUS DAY DELETION
 // ============================================================================
 if (isset($_POST['update_exchange_rate'])) {
     $currency_id = intval($_POST['currency_id']);
@@ -701,30 +709,60 @@ if (isset($_POST['update_exchange_rate'])) {
     $rate_to_lkr = floatval($_POST['rate_to_lkr']);
     $source = $_POST['source'] ?? 'API';
     
-    // Check if rate for this currency and date already exists
-    $check_stmt = $conn->prepare("SELECT rate_id FROM exchange_rates WHERE currency_id = ? AND rate_date = ?");
-    $check_stmt->bind_param("is", $currency_id, $rate_date);
-    $check_stmt->execute();
-    $check_result = $check_stmt->get_result();
+    // Start transaction
+    $conn->begin_transaction();
     
-    if ($check_result->num_rows > 0) {
-        // Update existing rate
-        $update_stmt = $conn->prepare("UPDATE exchange_rates SET rate_to_lkr = ?, source = ? WHERE currency_id = ? AND rate_date = ?");
-        $update_stmt->bind_param("dsis", $rate_to_lkr, $source, $currency_id, $rate_date);
-        $success = $update_stmt->execute();
-        $update_stmt->close();
-    } else {
-        // Insert new rate
-        $insert_stmt = $conn->prepare("INSERT INTO exchange_rates (currency_id, rate_date, rate_to_lkr, source) VALUES (?, ?, ?, ?)");
-        $insert_stmt->bind_param("isds", $currency_id, $rate_date, $rate_to_lkr, $source);
-        $success = $insert_stmt->execute();
-        $insert_stmt->close();
+    try {
+        // Delete the previous day's rate for this currency
+        $delete_stmt = $conn->prepare("
+            DELETE FROM exchange_rates 
+            WHERE currency_id = ? 
+            AND rate_date = DATE_SUB(?, INTERVAL 1 DAY)
+        ");
+        $delete_stmt->bind_param("is", $currency_id, $rate_date);
+        $delete_stmt->execute();
+        $deleted_count = $delete_stmt->affected_rows;
+        $delete_stmt->close();
+        
+        // Check if rate for this currency and date already exists
+        $check_stmt = $conn->prepare("SELECT rate_id FROM exchange_rates WHERE currency_id = ? AND rate_date = ?");
+        $check_stmt->bind_param("is", $currency_id, $rate_date);
+        $check_stmt->execute();
+        $check_result = $check_stmt->get_result();
+        
+        if ($check_result->num_rows > 0) {
+            // Update existing rate
+            $update_stmt = $conn->prepare("UPDATE exchange_rates SET rate_to_lkr = ?, source = ? WHERE currency_id = ? AND rate_date = ?");
+            $update_stmt->bind_param("dsis", $rate_to_lkr, $source, $currency_id, $rate_date);
+            $success = $update_stmt->execute();
+            $update_stmt->close();
+        } else {
+            // Insert new rate
+            $insert_stmt = $conn->prepare("INSERT INTO exchange_rates (currency_id, rate_date, rate_to_lkr, source) VALUES (?, ?, ?, ?)");
+            $insert_stmt->bind_param("isds", $currency_id, $rate_date, $rate_to_lkr, $source);
+            $success = $insert_stmt->execute();
+            $insert_stmt->close();
+        }
+        
+        $check_stmt->close();
+        
+        // Commit transaction
+        $conn->commit();
+        
+        header('Content-Type: application/json');
+        echo json_encode([
+            'success' => $success,
+            'deleted_previous' => $deleted_count > 0,
+            'deleted_count' => $deleted_count,
+            'message' => $deleted_count > 0 ? "Previous day's rate deleted and new rate saved" : "New rate saved (no previous day rate found)"
+        ]);
+        
+    } catch (Exception $e) {
+        // Rollback on error
+        $conn->rollback();
+        header('Content-Type: application/json');
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
     }
-    
-    $check_stmt->close();
-    
-    header('Content-Type: application/json');
-    echo json_encode(['success' => $success]);
     exit;
 }
 
