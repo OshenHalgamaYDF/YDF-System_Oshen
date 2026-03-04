@@ -43,6 +43,23 @@ class HomeController extends Controller {
             if ($result->num_rows > 0) {
                 $recentOrders = $result->fetch_all(MYSQLI_ASSOC);
             }
+
+            // --- Exchange rates for dashboard ---
+            $exchangeRates = [];
+            $sql = "SELECT c.code, er.rate_to_lkr, er.source 
+                    FROM exchange_rates er 
+                    JOIN currencies c ON er.currency_id = c.currency_id 
+                    WHERE er.rate_date = CURDATE()";
+            $result = $conn->query($sql);
+            while ($row = $result->fetch_assoc()) {
+                $code = $row['code'];
+                $src  = $row['source'];
+                $rate = $row['rate_to_lkr'];
+                if (!isset($exchangeRates[$code])) {
+                    $exchangeRates[$code] = [];
+                }
+                $exchangeRates[$code][$src] = $rate;
+            }
         } catch (Exception $e) {
             // Handle error
             $error = "Database error: " . $e->getMessage();
@@ -51,6 +68,7 @@ class HomeController extends Controller {
         $this->view('home', [
             'stats' => $stats,
             'recentOrders' => $recentOrders,
+            'exchangeRates' => $exchangeRates ?? [],
             'error' => $error ?? null,
             'pageTitle' => 'Dashboard - YDF'
         ]);

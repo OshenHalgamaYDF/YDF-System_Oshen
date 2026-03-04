@@ -1,7 +1,6 @@
 <?php
 // ============================================================================
-// accountingcontroller.php – FULLY COMMENTED VERSION WITH MULTI-COUNTRY SUPPORT
-// AND EXCHANGE RATE API INTEGRATION - FIXED RATE CALCULATIONS
+// accountingcontroller.php – COMPLETE VERSION WITH SIMPLIFIED EXCHANGE RATE SYSTEM
 // ============================================================================
 
 session_start(); // Start session for country selection
@@ -23,7 +22,6 @@ if ($conn->connect_error) {
 }
 
 $conn->set_charset('utf8mb4'); // Always use UTF-8 for safety
-$conn->begin_transaction(); // Start transaction for multiple operations
 
 // ============================================================================
 // COUNTRY SELECTION HANDLING (with All Countries option)
@@ -52,15 +50,15 @@ if ($active_country_id == 0) {
     $active_country = $country_stmt->get_result()->fetch_assoc();
     $country_stmt->close();
 }
+
 // ============================================================================
-// 2) AJAX ENDPOINT — LOAD VOUCHER FORM FOR EDITING - FIXED
+// 2) AJAX ENDPOINT — LOAD VOUCHER FORM FOR EDITING
 // ============================================================================
 if (isset($_GET['action']) && $_GET['action'] === 'get_voucher' && isset($_GET['id'])) {
 
     $id = intval($_GET['id']);
 
-    // ------------------ Fetch Voucher Header ------------------
-    // REMOVED 'amount' from the SELECT - it doesn't exist in vouchers table
+    // Fetch Voucher Header
     if ($active_country_id == 0) {
         $vstmt = $conn->prepare("
             SELECT voucher_id, voucher_type, date, narration, currency_id, exchange_rate
@@ -85,7 +83,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_voucher' && isset($_GET['
         exit;
     }
 
-    // ------------------ Fetch Dr/Cr Entries -------------------
+    // Fetch Dr/Cr Entries
     $estmt = $conn->prepare("
         SELECT entry_id, ledger_id, type, amount, amount_lkr
         FROM voucher_entries
@@ -101,10 +99,10 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_voucher' && isset($_GET['
     $voucher_amount = 0;
     foreach ($entries as $e) {
         $voucher_amount = floatval($e['amount']);
-        break; // Take the first one since Dr and Cr amounts should be equal
+        break;
     }
 
-    // ------------------ Fetch Ledgers For Dropdowns ------------
+    // Fetch Ledgers For Dropdowns
     $ledgers_stmt = $conn->prepare("SELECT ledger_id, ledger_name FROM ledgers ORDER BY ledger_name ASC");
     $ledgers_stmt->execute();
     $ledgers_result = $ledgers_stmt->get_result();
@@ -116,7 +114,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_voucher' && isset($_GET['
     }
     $ledgers_stmt->close();
 
-    // ------------------ Return HTML (AJAX fragment) -------------
+    // Return HTML
     ?>
     
     <div class="row mb-2">
@@ -134,14 +132,13 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_voucher' && isset($_GET['
         </div>
         <div class="col-md-4">
             <label>Date</label>
-            <input type="date" name="date" class="form-control"
+            <input type="date" id="editDateInput" name="date" class="form-control"
                    value="<?= htmlspecialchars($voucher['date']) ?>" required>
         </div>
         <div class="col-md-4">
             <label>Amount <?= ($active_country_id == 0) ? '' : '(' . htmlspecialchars($active_country['currency_code']) . ')' ?></label>
-            <input type="text" name="amount" id="editAmountInput" class="form-control"
-                   required placeholder="e.g., $100 or 100"
-                   value="<?= number_format($voucher_amount, 2, '.', '') ?>">
+            <input type="number" name="amount" id="editAmountInput" class="form-control" step="0.01"
+                   required value="<?= number_format($voucher_amount, 2, '.', '') ?>">
         </div>
     </div>
 
@@ -160,7 +157,8 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_voucher' && isset($_GET['
         </div>
         <div class="col-md-6">
             <label>Exchange Rate (1 FC = ? LKR)</label>
-            <input type="number" name="exchange_rate" id="editExchangeRateInput" class="form-control" step="0.000001" value="<?= number_format((float)($voucher['exchange_rate'] ?? 1.0), 6, '.', '') ?>" readonly>
+            <input type="number" name="exchange_rate" id="editExchangeRateInput" class="form-control" step="0.000001" value="<?= number_format((float)($voucher['exchange_rate'] ?? 1.0), 6, '.', '') ?>" required>
+            <small class="text-muted">Current rate from voucher</small>
         </div>
     </div>
 
@@ -211,7 +209,6 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_voucher' && isset($_GET['
     exit;
 }
 
-
 // ============================================================================
 // AJAX: GET LEDGERS
 // ============================================================================
@@ -230,24 +227,113 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_ledgers') {
 }
 
 // ============================================================================
-// AJAX: GET EXCHANGE RATE - FIXED: Now returns LKR per foreign currency
+// AJAX: GET EXCHANGE RATE - Returns LKR per foreign currency
 // ============================================================================
 if (isset($_GET['action']) && $_GET['action'] === 'get_rate' && isset($_GET['code'])) {
     $code = $_GET['code'];
     $date = $_GET['date'] ?? date('Y-m-d');
     $rate = null;
-    $stmt = $conn->prepare("SELECT er.rate_to_lkr FROM exchange_rates er JOIN currencies c ON er.currency_id = c.currency_id WHERE c.code = ? AND er.rate_date <= ? ORDER BY er.rate_date DESC LIMIT 1");
+    $stmt = $conn->prepare("
+        SELECT er.rate_to_lkr 
+        FROM exchange_rates er 
+        JOIN currencies c ON er.currency_id = c.currency_id 
+        WHERE c.code = ? AND er.rate_date <= ? 
+        ORDER BY er.rate_date DESC LIMIT 1
+    ");
     $stmt->bind_param("ss", $code, $date);
     $stmt->execute();
     $result = $stmt->get_result();
     if ($r = $result->fetch_assoc()) {
         $rate = $r['rate_to_lkr'];
     }
+    $stmt->close();
     header('Content-Type: application/json');
     echo json_encode(['rate' => $rate]);
     exit;
 }
 
+// ============================================================================
+// AJAX: GET MANUAL RATES FOR CURRENCY
+// ============================================================================
+if (isset($_GET['action']) && $_GET['action'] === 'get_manual_rates' && isset($_GET['code'])) {
+    $code = $_GET['code'];
+    $date = $_GET['date'] ?? date('Y-m-d');
+    
+    // Get the most recent manual rate for this currency
+    $stmt = $conn->prepare("
+        SELECT er.rate_to_lkr, er.rate_date
+        FROM exchange_rates er
+        JOIN currencies c ON er.currency_id = c.currency_id
+        WHERE c.code = ? AND er.source = 'Manual' AND er.rate_date <= ?
+        ORDER BY er.rate_date DESC
+        LIMIT 1
+    ");
+    $stmt->bind_param("ss", $code, $date);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    if ($row = $result->fetch_assoc()) {
+        header('Content-Type: application/json');
+        echo json_encode([
+            'success' => true,
+            'rate' => $row['rate_to_lkr'],
+            'date' => $row['rate_date']
+        ]);
+    } else {
+        header('Content-Type: application/json');
+        echo json_encode(['success' => false]);
+    }
+    $stmt->close();
+    exit;
+}
+
+// ============================================================================
+// AJAX: GET CURRENT RATES FOR DASHBOARD
+// ============================================================================
+if (isset($_GET['action']) && $_GET['action'] === 'get_current_rates') {
+    $query = "
+        SELECT er1.*, c.code, c.name 
+        FROM exchange_rates er1
+        JOIN currencies c ON er1.currency_id = c.currency_id
+        WHERE er1.rate_date = (
+            SELECT MAX(rate_date) 
+            FROM exchange_rates er2 
+            WHERE er2.currency_id = er1.currency_id
+        )
+        ORDER BY c.code
+        LIMIT 8
+    ";
+    
+    $result = $conn->query($query);
+    $rates = [];
+    
+    while ($row = $result->fetch_assoc()) {
+        $rates[] = $row;
+    }
+    
+    header('Content-Type: application/json');
+    echo json_encode(['success' => true, 'rates' => $rates]);
+    exit;
+}
+
+// ============================================================================
+// AJAX: GET CURRENCY ID BY CODE
+// ============================================================================
+if (isset($_GET['action']) && $_GET['action'] === 'get_currency_id' && isset($_GET['code'])) {
+    $code = $_GET['code'];
+    $stmt = $conn->prepare("SELECT currency_id FROM currencies WHERE code = ?");
+    $stmt->bind_param("s", $code);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    if ($row = $result->fetch_assoc()) {
+        echo json_encode(['currency_id' => $row['currency_id']]);
+    } else {
+        echo json_encode(['currency_id' => null]);
+    }
+    $stmt->close();
+    exit;
+}
 
 // ============================================================================
 // 3) ADD LEDGER
@@ -284,7 +370,6 @@ if (isset($_POST['add_ledger'])) {
     }
 }
 
-
 // ============================================================================
 // 4) ADD VOUCHER
 // ============================================================================
@@ -317,6 +402,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_voucher'])) {
     $amount_lkr = round($amount * $exchange_rate, 2);
     $country_id_to_save = ($active_country_id == 0) ? 0 : $active_country_id;
 
+    $conn->begin_transaction();
+
     $stmt = $conn->prepare("
         INSERT INTO vouchers (voucher_type, date, narration, currency_id, exchange_rate, country_id, created_at)
         VALUES (?, ?, ?, ?, ?, ?, NOW())
@@ -339,10 +426,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_voucher'])) {
     $stmt3->bind_param("iidd", $voucher_id, $cr_ledger, $amount, $amount_lkr);
     $stmt3->execute();
 
+    $conn->commit();
     header("Location: ?success=1");
     exit;
 }
-
 
 // ============================================================================
 // 5) UPDATE EXISTING VOUCHER
@@ -454,50 +541,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_voucher'])) {
     }
 }
 
-
 // ============================================================================
-// 6) BANK RECONCILIATION
-// ============================================================================
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_brs'])) {
-
-    $entry_id   = intval($_POST['entry_id'] ?? 0);
-    $is_cleared = intval($_POST['is_cleared'] ?? 0);
-
-    if ($entry_id > 0) {
-        $check = $conn->query("
-            SELECT reconciliation_id
-            FROM bank_reconciliation
-            WHERE voucher_entry_id = $entry_id
-        ");
-
-        $cleared_date = $is_cleared ? date('Y-m-d') : NULL;
-
-        if ($check->num_rows > 0) {
-            $query = "
-                UPDATE bank_reconciliation
-                SET is_cleared = $is_cleared,
-                    cleared_date = " . ($cleared_date ? "'$cleared_date'" : "NULL") . "
-                WHERE voucher_entry_id = $entry_id
-            ";
-            $conn->query($query);
-        } else {
-            $query = "
-                INSERT INTO bank_reconciliation (voucher_entry_id, is_cleared, cleared_date)
-                VALUES ($entry_id, $is_cleared, " . ($cleared_date ? "'$cleared_date'" : "NULL") . ")
-            ";
-            $conn->query($query);
-        }
-
-        echo json_encode(['success' => true]);
-    } else {
-        echo json_encode(['success' => false, 'error' => 'Invalid entry ID']);
-    }
-    exit;
-}
-
-
-// ============================================================================
-// 7) DELETE VOUCHER
+// 6) DELETE VOUCHER
 // ============================================================================
 if (isset($_POST['delete_voucher'])) {
 
@@ -540,7 +585,158 @@ if (isset($_POST['delete_voucher'])) {
 }
 
 // ============================================================================
-// 8) FETCH DATA FOR FRONTEND TABLES
+// 7) UPDATE EXCHANGE RATE (POST)
+// ============================================================================
+if (isset($_POST['update_exchange_rate'])) {
+    $currency_id = intval($_POST['currency_id']);
+    $rate_date = $_POST['rate_date'];
+    $rate_to_lkr = floatval($_POST['rate_to_lkr']);
+    $source = $_POST['source'] ?? 'Manual';
+    
+    // Check if rate for this currency and date already exists
+    $check_stmt = $conn->prepare("SELECT rate_id FROM exchange_rates WHERE currency_id = ? AND rate_date = ?");
+    $check_stmt->bind_param("is", $currency_id, $rate_date);
+    $check_stmt->execute();
+    $check_result = $check_stmt->get_result();
+    
+    if ($check_result->num_rows > 0) {
+        // Update existing rate
+        $update_stmt = $conn->prepare("UPDATE exchange_rates SET rate_to_lkr = ?, source = ? WHERE currency_id = ? AND rate_date = ?");
+        $update_stmt->bind_param("dsis", $rate_to_lkr, $source, $currency_id, $rate_date);
+        $success = $update_stmt->execute();
+        $update_stmt->close();
+    } else {
+        // Insert new rate
+        $insert_stmt = $conn->prepare("INSERT INTO exchange_rates (currency_id, rate_date, rate_to_lkr, source) VALUES (?, ?, ?, ?)");
+        $insert_stmt->bind_param("isds", $currency_id, $rate_date, $rate_to_lkr, $source);
+        $success = $insert_stmt->execute();
+        $insert_stmt->close();
+    }
+    
+    $check_stmt->close();
+    
+    header('Content-Type: application/json');
+    echo json_encode(['success' => $success]);
+    exit;
+}
+
+// ============================================================================
+// 8) GET CASH PROFIT DATA FOR GRAPH
+// ============================================================================
+if (isset($_GET['action']) && $_GET['action'] === 'get_cash_profit') {
+    
+    $start_date = isset($_GET['start_date']) ? $_GET['start_date'] : date('Y-m-d', strtotime('-6 days'));
+    $end_date = isset($_GET['end_date']) ? $_GET['end_date'] : date('Y-m-d');
+    
+    if (!strtotime($start_date) || !strtotime($end_date)) {
+        header('Content-Type: application/json');
+        echo json_encode(['success' => false, 'message' => 'Invalid date format']);
+        exit;
+    }
+    
+    if ($active_country_id == 0) {
+        $stmt = $conn->prepare("
+            SELECT 
+                DATE(v.date) as trans_date,
+                v.voucher_type,
+                SUM(ve.amount_lkr) as total_amount
+            FROM vouchers v
+            JOIN voucher_entries ve ON v.voucher_id = ve.voucher_id
+            WHERE v.voucher_type IN ('Payment', 'Receipt')
+                AND v.date BETWEEN ? AND ?
+            GROUP BY DATE(v.date), v.voucher_type
+            ORDER BY v.date ASC
+        ");
+        $stmt->bind_param("ss", $start_date, $end_date);
+    } else {
+        $stmt = $conn->prepare("
+            SELECT 
+                DATE(v.date) as trans_date,
+                v.voucher_type,
+                SUM(ve.amount_lkr) as total_amount
+            FROM vouchers v
+            JOIN voucher_entries ve ON v.voucher_id = ve.voucher_id
+            WHERE (v.country_id = ? OR v.country_id = 0)
+                AND v.voucher_type IN ('Payment', 'Receipt')
+                AND v.date BETWEEN ? AND ?
+            GROUP BY DATE(v.date), v.voucher_type
+            ORDER BY v.date ASC
+        ");
+        $stmt->bind_param("iss", $active_country_id, $start_date, $end_date);
+    }
+    
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    $start = new DateTime($start_date);
+    $end = new DateTime($end_date);
+    $interval = new DateInterval('P1D');
+    $dateRange = new DatePeriod($start, $interval, $end->modify('+1 day'));
+    
+    $dates = [];
+    $cashIn = [];
+    $cashOut = [];
+    $netProfit = [];
+    $totals = ['total_in' => 0, 'total_out' => 0, 'net_profit' => 0];
+    
+    foreach ($dateRange as $date) {
+        $dateKey = $date->format('Y-m-d');
+        $dates[] = $date->format('M d');
+        $cashIn[$dateKey] = 0;
+        $cashOut[$dateKey] = 0;
+    }
+    
+    while ($row = $result->fetch_assoc()) {
+        $date = $row['trans_date'];
+        if (array_key_exists($date, $cashIn)) {
+            if ($row['voucher_type'] === 'Receipt') {
+                $cashIn[$date] = floatval($row['total_amount']);
+                $totals['total_in'] += floatval($row['total_amount']);
+            } else if ($row['voucher_type'] === 'Payment') {
+                $cashOut[$date] = floatval($row['total_amount']);
+                $totals['total_out'] += floatval($row['total_amount']);
+            }
+        }
+    }
+    
+    $result->free();
+    $stmt->close();
+    
+    $cashInValues = [];
+    $cashOutValues = [];
+    $netProfitValues = [];
+    
+    foreach ($dateRange as $date) {
+        $dateKey = $date->format('Y-m-d');
+        $inValue = $cashIn[$dateKey] ?? 0;
+        $outValue = $cashOut[$dateKey] ?? 0;
+        
+        $cashInValues[] = $inValue;
+        $cashOutValues[] = $outValue;
+        $netValue = $inValue - $outValue;
+        $netProfitValues[] = $netValue;
+    }
+    
+    $totals['net_profit'] = $totals['total_in'] - $totals['total_out'];
+    
+    header('Content-Type: application/json');
+    echo json_encode([
+        'success' => true,
+        'labels' => $dates,
+        'cashIn' => $cashInValues,
+        'cashOut' => $cashOutValues,
+        'netProfit' => $netProfitValues,
+        'totals' => $totals,
+        'date_range' => [
+            'start' => $start_date,
+            'end' => $end_date
+        ]
+    ]);
+    exit;
+}
+
+// ============================================================================
+// 9) FETCH DATA FOR FRONTEND TABLES
 // ============================================================================
 
 function clearStoredResults($conn) {
@@ -664,221 +860,6 @@ $balances_stmt->close();
 clearStoredResults($conn);
 
 // ============================================================================
-// 9) GET EXCHANGE RATE (AJAX)
+// END OF CONTROLLER
 // ============================================================================
-if (isset($_GET['action']) && $_GET['action'] === 'get_rate' && isset($_GET['code'])) {
-    $code = $_GET['code'];
-    $date = $_GET['date'] ?? date('Y-m-d');
-    header('Content-Type: application/json');
-    $stmt = $conn->prepare("SELECT rate_to_lkr FROM exchange_rates er JOIN currencies c ON er.currency_id=c.currency_id WHERE c.code=? AND er.rate_date<=? ORDER BY er.rate_date DESC LIMIT 1");
-    $stmt->bind_param("ss", $code, $date);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    $row = $result->fetch_assoc();
-    $stmt->close();
-    clearStoredResults($conn);
-    echo json_encode(['rate' => $row['rate_to_lkr'] ?? null]);
-    exit;
-}
-
-// ============================================================================
-// NEW: AJAX: GET CURRENCY ID BY CODE
-// ============================================================================
-if (isset($_GET['action']) && $_GET['action'] === 'get_currency_id' && isset($_GET['code'])) {
-    $code = $_GET['code'];
-    $stmt = $conn->prepare("SELECT currency_id FROM currencies WHERE code = ?");
-    $stmt->bind_param("s", $code);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    
-    if ($row = $result->fetch_assoc()) {
-        echo json_encode(['currency_id' => $row['currency_id']]);
-    } else {
-        echo json_encode(['currency_id' => null]);
-    }
-    $stmt->close();
-    exit;
-}
-
-// ============================================================================
-// UPDATED: UPDATE EXCHANGE RATE (POST) - WITH PREVIOUS DAY DELETION
-// ============================================================================
-if (isset($_POST['update_exchange_rate'])) {
-    $currency_id = intval($_POST['currency_id']);
-    $rate_date = $_POST['rate_date'];
-    $rate_to_lkr = floatval($_POST['rate_to_lkr']);
-    $source = $_POST['source'] ?? 'API';
-    
-    // Start transaction
-    $conn->begin_transaction();
-    
-    try {
-        // Delete the previous day's rate for this currency
-        $delete_stmt = $conn->prepare("
-            DELETE FROM exchange_rates 
-            WHERE currency_id = ? 
-            AND rate_date = DATE_SUB(?, INTERVAL 1 DAY)
-        ");
-        $delete_stmt->bind_param("is", $currency_id, $rate_date);
-        $delete_stmt->execute();
-        $deleted_count = $delete_stmt->affected_rows;
-        $delete_stmt->close();
-        
-        // Check if rate for this currency and date already exists
-        $check_stmt = $conn->prepare("SELECT rate_id FROM exchange_rates WHERE currency_id = ? AND rate_date = ?");
-        $check_stmt->bind_param("is", $currency_id, $rate_date);
-        $check_stmt->execute();
-        $check_result = $check_stmt->get_result();
-        
-        if ($check_result->num_rows > 0) {
-            // Update existing rate
-            $update_stmt = $conn->prepare("UPDATE exchange_rates SET rate_to_lkr = ?, source = ? WHERE currency_id = ? AND rate_date = ?");
-            $update_stmt->bind_param("dsis", $rate_to_lkr, $source, $currency_id, $rate_date);
-            $success = $update_stmt->execute();
-            $update_stmt->close();
-        } else {
-            // Insert new rate
-            $insert_stmt = $conn->prepare("INSERT INTO exchange_rates (currency_id, rate_date, rate_to_lkr, source) VALUES (?, ?, ?, ?)");
-            $insert_stmt->bind_param("isds", $currency_id, $rate_date, $rate_to_lkr, $source);
-            $success = $insert_stmt->execute();
-            $insert_stmt->close();
-        }
-        
-        $check_stmt->close();
-        
-        // Commit transaction
-        $conn->commit();
-        
-        header('Content-Type: application/json');
-        echo json_encode([
-            'success' => $success,
-            'deleted_previous' => $deleted_count > 0,
-            'deleted_count' => $deleted_count,
-            'message' => $deleted_count > 0 ? "Previous day's rate deleted and new rate saved" : "New rate saved (no previous day rate found)"
-        ]);
-        
-    } catch (Exception $e) {
-        // Rollback on error
-        $conn->rollback();
-        header('Content-Type: application/json');
-        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
-    }
-    exit;
-}
-
-// ============================================================================
-// 10) GET CASH PROFIT DATA FOR GRAPH
-// ============================================================================
-if (isset($_GET['action']) && $_GET['action'] === 'get_cash_profit') {
-    
-    $start_date = isset($_GET['start_date']) ? $_GET['start_date'] : date('Y-m-d', strtotime('-6 days'));
-    $end_date = isset($_GET['end_date']) ? $_GET['end_date'] : date('Y-m-d');
-    
-    if (!strtotime($start_date) || !strtotime($end_date)) {
-        header('Content-Type: application/json');
-        echo json_encode(['success' => false, 'message' => 'Invalid date format']);
-        exit;
-    }
-    
-    if ($active_country_id == 0) {
-        $stmt = $conn->prepare("
-            SELECT 
-                DATE(v.date) as trans_date,
-                v.voucher_type,
-                SUM(ve.amount_lkr) as total_amount
-            FROM vouchers v
-            JOIN voucher_entries ve ON v.voucher_id = ve.voucher_id
-            WHERE v.voucher_type IN ('Payment', 'Receipt')
-                AND v.date BETWEEN ? AND ?
-            GROUP BY DATE(v.date), v.voucher_type
-            ORDER BY v.date ASC
-        ");
-        $stmt->bind_param("ss", $start_date, $end_date);
-    } else {
-        $stmt = $conn->prepare("
-            SELECT 
-                DATE(v.date) as trans_date,
-                v.voucher_type,
-                SUM(ve.amount_lkr) as total_amount
-            FROM vouchers v
-            JOIN voucher_entries ve ON v.voucher_id = ve.voucher_id
-            WHERE (v.country_id = ? OR v.country_id = 0)
-                AND v.voucher_type IN ('Payment', 'Receipt')
-                AND v.date BETWEEN ? AND ?
-            GROUP BY DATE(v.date), v.voucher_type
-            ORDER BY v.date ASC
-        ");
-        $stmt->bind_param("iss", $active_country_id, $start_date, $end_date);
-    }
-    
-    $stmt->execute();
-    $result = $stmt->get_result();
-    
-    $start = new DateTime($start_date);
-    $end = new DateTime($end_date);
-    $interval = new DateInterval('P1D');
-    $dateRange = new DatePeriod($start, $interval, $end->modify('+1 day'));
-    
-    $dates = [];
-    $cashIn = [];
-    $cashOut = [];
-    $netProfit = [];
-    $totals = ['total_in' => 0, 'total_out' => 0, 'net_profit' => 0];
-    
-    foreach ($dateRange as $date) {
-        $dateKey = $date->format('Y-m-d');
-        $dates[] = $date->format('M d');
-        $cashIn[$dateKey] = 0;
-        $cashOut[$dateKey] = 0;
-    }
-    
-    while ($row = $result->fetch_assoc()) {
-        $date = $row['trans_date'];
-        if (array_key_exists($date, $cashIn)) {
-            if ($row['voucher_type'] === 'Receipt') {
-                $cashIn[$date] = floatval($row['total_amount']);
-                $totals['total_in'] += floatval($row['total_amount']);
-            } else if ($row['voucher_type'] === 'Payment') {
-                $cashOut[$date] = floatval($row['total_amount']);
-                $totals['total_out'] += floatval($row['total_amount']);
-            }
-        }
-    }
-    
-    $result->free();
-    $stmt->close();
-    clearStoredResults($conn);
-    
-    $cashInValues = [];
-    $cashOutValues = [];
-    $netProfitValues = [];
-    
-    foreach ($dateRange as $date) {
-        $dateKey = $date->format('Y-m-d');
-        $inValue = $cashIn[$dateKey] ?? 0;
-        $outValue = $cashOut[$dateKey] ?? 0;
-        
-        $cashInValues[] = $inValue;
-        $cashOutValues[] = $outValue;
-        $netValue = $inValue - $outValue;
-        $netProfitValues[] = $netValue;
-    }
-    
-    $totals['net_profit'] = $totals['total_in'] - $totals['total_out'];
-    
-    header('Content-Type: application/json');
-    echo json_encode([
-        'success' => true,
-        'labels' => $dates,
-        'cashIn' => $cashInValues,
-        'cashOut' => $cashOutValues,
-        'netProfit' => $netProfitValues,
-        'totals' => $totals,
-        'date_range' => [
-            'start' => $start_date,
-            'end' => $end_date
-        ]
-    ]);
-    exit;
-}
 ?>

@@ -121,6 +121,39 @@
             </div>
         </div>
 
+        <!-- Exchange Rates Dashboard -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="bg-white p-3 p-md-4 rounded-3 shadow-sm">
+                    <h5 class="fw-bold mb-3">Exchange Rates (<?= date('Y-m-d'); ?>)</h5>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered">
+                            <thead>
+                                <tr>
+                                    <th>Currency</th>
+                                    <th>API Rate</th>
+                                    <th>Manual Rate</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php if (!empty($exchangeRates)): ?>
+                                    <?php foreach ($exchangeRates as $code => $sources): ?>
+                                        <tr>
+                                            <td><?= htmlspecialchars($code) ?></td>
+                                            <td><?= isset($sources['CBSL']) ? number_format($sources['CBSL'], 6) : '-' ?></td>
+                                            <td><?= isset($sources['Manual']) ? number_format($sources['Manual'], 6) : '-' ?></td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                <?php else: ?>
+                                    <tr><td colspan="3" class="text-center text-muted">No rates available for today.</td></tr>
+                                <?php endif; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Quick Stats Section -->
         <div class="row mt-3 mt-md-4 g-3 g-md-4">
             <div class="col-12 col-lg-6">
