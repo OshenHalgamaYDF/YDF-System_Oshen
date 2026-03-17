@@ -1,7 +1,8 @@
 <?php
 // ========================================
-// BANK RECONCILIATION (combined view + AJAX endpoint + ledger export)
+// BANK RECONCILIATION (combined view + AJAX endpoint + ledger export + file upload)
 // Added date range filter (filter_from, filter_to) to AJAX ledger view and export
+// Added automatic reconciliation via bank statement upload
 // ========================================
 session_start(); // Start session for country selection
 
@@ -37,6 +38,101 @@ $country_stmt->close();
 // --- Date range filter (from/to) ---
 $filter_from = isset($_GET['filter_from']) && $_GET['filter_from'] ? $_GET['filter_from'] : date('Y-01-01');
 $filter_to   = isset($_GET['filter_to']) && $_GET['filter_to'] ? $_GET['filter_to'] : date('Y-m-d');
+
+// --- Handle Bank Statement Upload and Auto-Reconciliation ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['upload_statement'])) {
+    header('Content-Type: application/json; charset=utf-8');
+    $ledger_id = intval($_POST['ledger_id'] ?? 0);
+    if ($ledger_id <= 0) {
+        echo json_encode(['success' => false, 'error' => 'Invalid bank account selected.']);
+        exit;
+    }
+
+    if (!isset($_FILES['bank_statement']) || $_FILES['bank_statement']['error'] !== UPLOAD_ERR_OK) {
+        echo json_encode(['success' => false, 'error' => 'File upload error.']);
+        exit;
+    }
+
+    $file = $_FILES['bank_statement'];
+    $allowed_types = ['text/csv', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
+    if (!in_array($file['type'], $allowed_types)) {
+        echo json_encode(['success' => false, 'error' => 'Invalid file type. Only CSV and Excel files are allowed.']);
+        exit;
+    }
+
+    // Create upload directory if not exists
+    $upload_dir = __DIR__ . '/../../../uploads/bank_statements/';
+    if (!is_dir($upload_dir)) {
+        mkdir($upload_dir, 0755, true);
+    }
+
+    $filename = 'bank_statement_' . $ledger_id . '_' . time() . '_' . basename($file['name']);
+    $filepath = $upload_dir . $filename;
+
+    if (!move_uploaded_file($file['tmp_name'], $filepath)) {
+        echo json_encode(['success' => false, 'error' => 'Failed to save uploaded file.']);
+        exit;
+    }
+
+    // Parse the file (assuming CSV for simplicity)
+    $transactions = [];
+    if (($handle = fopen($filepath, 'r')) !== false) {
+        $header = fgetcsv($handle); // Skip header
+        while (($data = fgetcsv($handle)) !== false) {
+            // Assume columns: Date, Description, Amount (positive for credit, negative for debit)
+            if (count($data) >= 3) {
+                $date = date('Y-m-d', strtotime($data[0]));
+                $description = trim($data[1]);
+                $amount = (float) str_replace([',', ' '], '', $data[2]);
+                $amount = abs($amount); // Use absolute value for matching
+                $transactions[] = ['date' => $date, 'description' => $description, 'amount' => $amount];
+            }
+        }
+        fclose($handle);
+    }
+
+    // Auto-reconcile: Match with voucher entries
+    $matched = 0;
+    $unmatched = 0;
+    foreach ($transactions as $txn) {
+        // Find matching voucher entry (same date, amount, type, and ledger)
+        $match_sql = "
+            SELECT ve.entry_id
+            FROM voucher_entries ve
+            JOIN vouchers v ON ve.voucher_id = v.voucher_id
+            LEFT JOIN bank_reconciliation br ON br.voucher_entry_id = ve.entry_id
+            WHERE ve.ledger_id = ? AND v.date = ? AND ve.amount = ? AND ve.type = ? AND (br.is_cleared IS NULL OR br.is_cleared = 0)
+            LIMIT 1
+        ";
+        $match_stmt = $conn->prepare($match_sql);
+        $match_stmt->bind_param("isdss", $ledger_id, $txn['date'], $txn['amount'], $txn['type']);
+        $match_stmt->execute();
+        $match_res = $match_stmt->get_result();
+        if ($match_res->num_rows > 0) {
+            $entry = $match_res->fetch_assoc();
+            $entry_id = $entry['entry_id'];
+            // Mark as reconciled
+            $update_stmt = $conn->prepare("INSERT INTO bank_reconciliation (voucher_entry_id, is_cleared, cleared_date) VALUES (?, 1, ?) ON DUPLICATE KEY UPDATE is_cleared = 1, cleared_date = ?");
+            $update_stmt->bind_param("iss", $entry_id, date('Y-m-d'), date('Y-m-d'));
+            $update_stmt->execute();
+            $update_stmt->close();
+            $matched++;
+        } else {
+            $unmatched++;
+        }
+        $match_stmt->close();
+    }
+
+    // Optionally, store the statement in DB (create table if needed)
+    // For now, just log the upload
+    $log_stmt = $conn->prepare("INSERT INTO bank_statement_uploads (ledger_id, filename, uploaded_at, matched, unmatched) VALUES (?, ?, NOW(), ?, ?)");
+    $log_stmt->bind_param("isii", $ledger_id, $filename, $matched, $unmatched);
+    $log_stmt->execute();
+    $log_stmt->close();
+
+    echo json_encode(['success' => true, 'matched' => $matched, 'unmatched' => $unmatched]);
+    exit;
+}
 
 // --- AJAX: Update Reconciliation Status (POST) ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_brs'])) {
