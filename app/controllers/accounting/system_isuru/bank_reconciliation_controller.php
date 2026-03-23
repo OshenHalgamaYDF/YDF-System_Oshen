@@ -6,6 +6,12 @@
 // ========================================
 session_start(); // Start session for country selection
 
+// Load composer autoload if available
+$autoloadPath = __DIR__ . '/../../../../vendor/autoload.php';
+if (file_exists($autoloadPath)) {
+    require_once $autoloadPath;
+}
+
 $servername = "localhost";
 $username = "root";
 $password = "";
@@ -54,9 +60,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['upload_statement'])) 
     }
 
     $file = $_FILES['bank_statement'];
-    $allowed_types = ['text/csv', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
+    $allowed_types = ['text/csv', 'application/pdf', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
     if (!in_array($file['type'], $allowed_types)) {
-        echo json_encode(['success' => false, 'error' => 'Invalid file type. Only CSV and Excel files are allowed.']);
+        echo json_encode(['success' => false, 'error' => 'Invalid file type. Only CSV, PDF, or Excel files are allowed.']);
+        exit;
+    }
+
+    $allowed_extensions = ['csv', 'xls', 'xlsx', 'pdf'];
+    $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+    if (!in_array($ext, $allowed_extensions)) {
+        echo json_encode(['success' => false, 'error' => 'Invalid file extension. Please upload CSV, PDF, or Excel.']);
         exit;
     }
 
@@ -74,28 +87,188 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['upload_statement'])) 
         exit;
     }
 
-    // Parse the file (assuming CSV for simplicity)
     $transactions = [];
-    if (($handle = fopen($filepath, 'r')) !== false) {
-        $header = fgetcsv($handle); // Skip header
-        while (($data = fgetcsv($handle)) !== false) {
-            // Assume columns: Date, Description, Amount (positive for credit, negative for debit)
-            if (count($data) >= 3) {
-                $date = date('Y-m-d', strtotime($data[0]));
+    if ($ext === 'csv') {
+        if (($handle = fopen($filepath, 'r')) !== false) {
+            $header = fgetcsv($handle);
+            while (($data = fgetcsv($handle)) !== false) {
+                if (count($data) < 3) {
+                    continue;
+                }
+
+                $rawDate = trim($data[0]);
+                $rawAmount = trim($data[2]);
+                $date = date('Y-m-d', strtotime(str_replace('/', '-', $rawDate)));
+                if (!$date || $date === '1970-01-01') {
+                    continue;
+                }
+
+                $cleanAmount = str_replace([',', ' ', '₹', 'Rs', 'USD', 'LKR'], '', $rawAmount);
+                $cleanAmount = preg_replace('/[^0-9\.-]/', '', $cleanAmount);
+                if ($cleanAmount === '' || !is_numeric($cleanAmount)) {
+                    continue;
+                }
+
+                $amount = (float)$cleanAmount;
+                if ($amount == 0) {
+                    continue;
+                }
+
+                $type = $amount < 0 ? 'Dr' : 'Cr';
+                $amount = abs($amount);
                 $description = trim($data[1]);
-                $amount = (float) str_replace([',', ' '], '', $data[2]);
-                $amount = abs($amount); // Use absolute value for matching
-                $transactions[] = ['date' => $date, 'description' => $description, 'amount' => $amount];
+
+                $transactions[] = [
+                    'date' => $date,
+                    'description' => $description,
+                    'amount' => $amount,
+                    'type' => $type,
+                ];
             }
+            fclose($handle);
         }
-        fclose($handle);
+    } elseif ($ext === 'pdf') {
+        require_once __DIR__ . '/../../../../vendor/autoload.php';
+
+        try {
+            $parser = new \Smalot\PdfParser\Parser();
+            $pdf = $parser->parseFile($filepath);
+            $text = $pdf->getText();
+
+            // Debug logging
+            error_log("Original PDF Text length: " . strlen($text));
+            error_log("First 500 chars: " . substr($text, 0, 500));
+
+            // Clean up the text - remove HTML-like tags and normalize
+            $text = strip_tags($text);
+            $text = preg_replace('/\s+/', ' ', $text);
+            $text = str_replace(['>', '<'], '', $text);
+
+            // Split into lines based on dateable patterns
+            $lines = [];
+            $parts = preg_split('/(?=\d{2}\/\d{2}\/\d{4})/', $text);
+            foreach ($parts as $part) {
+                $part = trim($part);
+                if (!empty($part) && strlen($part) > 10) {
+                    $lines[] = $part;
+                }
+            }
+            if (count($lines) < 5) {
+                $lines = explode("\n", $text);
+            }
+            error_log("Number of potential transaction lines: " . count($lines));
+
+            $transactions = [];
+            $processed = [];
+
+            foreach ($lines as $line) {
+                $line = trim($line);
+                if (empty($line) || strlen($line) < 15 ||
+                    stripos($line, 'statement') !== false ||
+                    stripos($line, 'report') !== false ||
+                    stripos($line, 'page') !== false ||
+                    stripos($line, 'balance') !== false ||
+                    stripos($line, 'client') !== false ||
+                    stripos($line, 'bank') !== false ||
+                    stripos($line, 'account') !== false) {
+                    continue;
+                }
+
+                if (preg_match('/(\d{2}\/\d{2}\/\d{4})/', $line, $dateMatch)) {
+                    $dateStr = $dateMatch[1];
+
+                    if (preg_match_all('/(\d{1,3}(?:,\d{3})*\.\d{2})/', $line, $amountMatches)) {
+                        $amountStr = end($amountMatches[1]);
+                        $amount = (float)str_replace(',', '', $amountStr);
+                        $dateParts = explode('/', $dateStr);
+                        if (count($dateParts) == 3) {
+                            $date = $dateParts[2] . '-' . $dateParts[1] . '-' . $dateParts[0];
+                            $type = 'Dr';
+                            if (preg_match('/(SD|CREDIT|INWARD|TRF FROM|DEPOSIT)/i', $line)) {
+                                $type = 'Cr';
+                            }
+                            $description = str_replace($dateStr, '', $line);
+                            $description = str_replace($amountStr, '', $description);
+                            $description = preg_replace('/\d{1,3}(?:,\d{3})*\.\d{2}/', '', $description);
+                            $description = trim(preg_replace('/\s+/', ' ', $description));
+                            $description = str_replace(['DC', 'SD', 'CEFT', 'HNB', 'TXB', 'CHG'], '', $description);
+                            $description = preg_replace('/[0-9]{10,}/', '', $description);
+                            $description = trim($description);
+                            if (empty($description)) {
+                                $description = 'Bank Transaction';
+                            }
+
+                            $key = $date . '|' . $amount . '|' . substr($description, 0, 20);
+                            if (!isset($processed[$key])) {
+                                $processed[$key] = true;
+                                $transactions[] = [
+                                    'date' => $date,
+                                    'description' => substr($description, 0, 255),
+                                    'amount' => $amount,
+                                    'type' => $type,
+                                ];
+                                error_log("Found transaction: $date | $amount | $type | $description");
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Aggressive fallback pattern
+            if (count($transactions) === 0 && preg_match_all('/(\d{2}\/\d{2}\/\d{4})([A-Z]{2}\d+)([\d,]+\.\d{2})/', $text, $matches, PREG_SET_ORDER)) {
+                foreach ($matches as $match) {
+                    $dateParts = explode('/', $match[1]);
+                    $date = $dateParts[2] . '-' . $dateParts[1] . '-' . $dateParts[0];
+                    $amount = (float)str_replace(',', '', $match[3]);
+                    $key = $date . '|' . $amount;
+                    if (!isset($processed[$key])) {
+                        $processed[$key] = true;
+                        $transactions[] = [
+                            'date' => $date,
+                            'description' => 'Bank Transaction Ref: ' . $match[2],
+                            'amount' => $amount,
+                            'type' => (strpos($match[2], 'SD') !== false) ? 'Cr' : 'Dr',
+                        ];
+                    }
+                }
+            }
+
+            // Deduplicate
+            $unique = [];
+            foreach ($transactions as $txn) {
+                $key = $txn['date'] . '|' . $txn['amount'] . '|' . $txn['type'];
+                if (!isset($unique[$key])) {
+                    $unique[$key] = $txn;
+                }
+            }
+            $transactions = array_values($unique);
+
+            error_log("Final transaction count: " . count($transactions));
+
+            if (count($transactions) === 0) {
+                $debug_file = __DIR__ . '/../../../uploads/bank_statements/debug_' . time() . '.txt';
+                file_put_contents($debug_file, $text);
+                echo json_encode([
+                    'success' => false,
+                    'error' => 'Could not parse PDF transactions. The file has been saved for debugging. Please try exporting as CSV instead.'
+                ]);
+                exit;
+            }
+
+        } catch (Exception $e) {
+            error_log("PDF Parser Exception: " . $e->getMessage());
+            echo json_encode([
+                'success' => false,
+                'error' => 'PDF parsing failed: ' . $e->getMessage()
+            ]);
+            exit;
+        }
     }
 
     // Auto-reconcile: Match with voucher entries
     $matched = 0;
     $unmatched = 0;
     foreach ($transactions as $txn) {
-        // Find matching voucher entry (same date, amount, type, and ledger)
         $match_sql = "
             SELECT ve.entry_id
             FROM voucher_entries ve
@@ -105,13 +278,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['upload_statement'])) 
             LIMIT 1
         ";
         $match_stmt = $conn->prepare($match_sql);
-        $match_stmt->bind_param("isdss", $ledger_id, $txn['date'], $txn['amount'], $txn['type']);
+        $match_stmt->bind_param("isds", $ledger_id, $txn['date'], $txn['amount'], $txn['type']);
         $match_stmt->execute();
         $match_res = $match_stmt->get_result();
+
+        if ($match_res->num_rows === 0) {
+            // Fallback: If type mismatch or missing type, try date+amount only
+            $fallback_sql = "
+                SELECT ve.entry_id
+                FROM voucher_entries ve
+                JOIN vouchers v ON ve.voucher_id = v.voucher_id
+                LEFT JOIN bank_reconciliation br ON br.voucher_entry_id = ve.entry_id
+                WHERE ve.ledger_id = ? AND v.date = ? AND ve.amount = ? AND (br.is_cleared IS NULL OR br.is_cleared = 0)
+                LIMIT 1
+            ";
+            $fallback_stmt = $conn->prepare($fallback_sql);
+            $fallback_stmt->bind_param("isd", $ledger_id, $txn['date'], $txn['amount']);
+            $fallback_stmt->execute();
+            $match_res = $fallback_stmt->get_result();
+            $fallback_stmt->close();
+        }
+
         if ($match_res->num_rows > 0) {
             $entry = $match_res->fetch_assoc();
             $entry_id = $entry['entry_id'];
-            // Mark as reconciled
             $update_stmt = $conn->prepare("INSERT INTO bank_reconciliation (voucher_entry_id, is_cleared, cleared_date) VALUES (?, 1, ?) ON DUPLICATE KEY UPDATE is_cleared = 1, cleared_date = ?");
             $update_stmt->bind_param("iss", $entry_id, date('Y-m-d'), date('Y-m-d'));
             $update_stmt->execute();
@@ -120,6 +310,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['upload_statement'])) 
         } else {
             $unmatched++;
         }
+
         $match_stmt->close();
     }
 

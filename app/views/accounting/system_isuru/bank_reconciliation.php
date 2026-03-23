@@ -98,8 +98,8 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\system_isur
         <!-- Bank Statement Upload Section -->
         <div class="row g-3 mb-4 no-print">
             <div class="col-md-8">
-                <label for="bankStatementFile" class="form-label fw-semibold">Upload Bank Statement (CSV/Excel):</label>
-                <input type="file" id="bankStatementFile" class="form-control" accept=".csv,.xlsx,.xls">
+                <label for="bankStatementFile" class="form-label fw-semibold">Upload Bank Statement (CSV/PDF):</label>
+                <input type="file" id="bankStatementFile" class="form-control" accept=".csv,.xlsx,.xls,.pdf">
             </div>
             <div class="col-md-4 d-flex align-items-end">
                 <button id="uploadStatementBtn" class="btn btn-success w-100"><i class="bi bi-upload"></i> Upload & Reconcile</button>
@@ -127,7 +127,6 @@ const filterToInput = document.getElementById('filter_to');
 const brsPeriod = document.getElementById('brsPeriod');
 const thisYearBtn = document.getElementById('thisYearBtn');
 const thisMonthBtn = document.getElementById('thisMonthBtn');
-const uploadLedgerSelect = document.getElementById('uploadLedgerSelect');
 const bankStatementFile = document.getElementById('bankStatementFile');
 const uploadStatementBtn = document.getElementById('uploadStatementBtn');
 const uploadStatus = document.getElementById('uploadStatus');
