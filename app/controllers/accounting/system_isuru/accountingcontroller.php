@@ -8,19 +8,8 @@ session_start(); // Start session for country selection
 // ============================================================================
 // 1) DATABASE CONNECTION
 // ============================================================================
-$servername = "localhost";
-$username   = "root";
-$password   = "";
-$database   = "ydf-system";
-
-// Connect to MySQL using MySQLi
-$conn = new mysqli($servername, $username, $password, $database);
-
-// Stop everything if connection fails
-if ($conn->connect_error) {
-    die("❌ Connection failed: " . $conn->connect_error);
-}
-
+require_once __DIR__ . '/../../../config/config.php';
+$conn = getDBConnection();
 $conn->set_charset('utf8mb4'); // Always use UTF-8 for safety
 
 // ============================================================================
@@ -644,6 +633,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_cash_profit') {
             JOIN voucher_entries ve ON v.voucher_id = ve.voucher_id
             WHERE v.voucher_type IN ('Payment', 'Receipt')
                 AND v.date BETWEEN ? AND ?
+                AND ve.ledger_id = 34
             GROUP BY DATE(v.date), v.voucher_type
             ORDER BY v.date ASC
         ");
@@ -659,6 +649,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_cash_profit') {
             WHERE (v.country_id = ? OR v.country_id = 0)
                 AND v.voucher_type IN ('Payment', 'Receipt')
                 AND v.date BETWEEN ? AND ?
+                AND ve.ledger_id = 34
             GROUP BY DATE(v.date), v.voucher_type
             ORDER BY v.date ASC
         ");

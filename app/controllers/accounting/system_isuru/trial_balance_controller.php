@@ -8,13 +8,8 @@
 // ---------------------------------------------------------
 session_start(); // Start session for country selection
 
-$servername = "localhost";
-$username   = "root";
-$password   = "";
-$database   = "ydf-system";
-
-mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
-$conn = new mysqli($servername, $username, $password, $database);
+require_once __DIR__ . '/../../../config/config.php';
+$conn = getDBConnection();
 $conn->set_charset('utf8mb4');
 
 // ============================================================================

@@ -5,13 +5,8 @@
 // =============================
 session_start(); // Start session for country selection
 
-$servername = "localhost";
-$username = "root";
-$password = "";
-$database = "ydf-system";
-
-$conn = new mysqli($servername, $username, $password, $database);
-if ($conn->connect_error) die("Connection failed: " . $conn->connect_error);
+require_once __DIR__ . '/../../../config/config.php';
+$conn = getDBConnection();
 $conn->set_charset('utf8mb4');
 
 // ============================================================================

@@ -63,7 +63,7 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\system_isur
 
     <div class="card-body">
         <div class="row g-2 align-items-end mb-3 no-print">
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <label for="brsLedgerSelect" class="form-label fw-semibold">Select Bank Account:</label>
                 <select id="brsLedgerSelect" class="form-select">
                     <option value="">-- Choose Bank Ledger --</option>
@@ -71,6 +71,10 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\system_isur
                     <option value="<?= $bank['ledger_id'] ?>"><?= htmlspecialchars($bank['ledger_name']) ?></option>
                     <?php endwhile; ?>
                 </select>
+            </div>
+            <div class="col-md-3">
+                <label for="csvUpload" class="form-label fw-semibold">Upload Bank Statement (CSV):</label>
+                <input type="file" id="csvUpload" class="form-control" accept=".csv,.xlsx" />
             </div>
             <div class="col-md-2">
                 <label for="filter_from" class="form-label fw-semibold">From:</label>
@@ -83,6 +87,7 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\system_isur
 
             <div class="col-auto">
                 <button id="brsApplyBtn" class="btn btn-primary mt-2"><i class="bi bi-funnel"></i> Apply Filter</button>
+                <button id="brsUploadBtn" class="btn btn-info mt-2" style="display:none;"><i class="bi bi-cloud-upload"></i> Upload & Reconcile</button>
             </div>
 
             <div class="col-auto mt-2">
@@ -94,19 +99,6 @@ include('C:\xampp\htdocs\ydf-system-oshen\app\controllers\accounting\system_isur
                 <small class="text-muted">Showing period: <strong id="brsPeriod"><?= htmlspecialchars(date('M d, Y', strtotime($filter_from))) ?> to <?= htmlspecialchars(date('M d, Y', strtotime($filter_to))) ?></strong></small>
             </div>
         </div>
-
-        <!-- Bank Statement Upload Section -->
-        <div class="row g-3 mb-4 no-print">
-            <div class="col-md-8">
-                <label for="bankStatementFile" class="form-label fw-semibold">Upload Bank Statement (CSV/PDF):</label>
-                <input type="file" id="bankStatementFile" class="form-control" accept=".csv,.xlsx,.xls,.pdf">
-            </div>
-            <div class="col-md-4 d-flex align-items-end">
-                <button id="uploadStatementBtn" class="btn btn-success w-100"><i class="bi bi-upload"></i> Upload & Reconcile</button>
-            </div>
-        </div>
-        <div id="uploadStatus" class="mb-3"></div>
-
         <div id="brsDet" class="mt-4 text-center text-muted">
             <p>Select a bank account and period to view reconciliation entries...</p>
         </div>
@@ -127,9 +119,8 @@ const filterToInput = document.getElementById('filter_to');
 const brsPeriod = document.getElementById('brsPeriod');
 const thisYearBtn = document.getElementById('thisYearBtn');
 const thisMonthBtn = document.getElementById('thisMonthBtn');
-const bankStatementFile = document.getElementById('bankStatementFile');
-const uploadStatementBtn = document.getElementById('uploadStatementBtn');
-const uploadStatus = document.getElementById('uploadStatus');
+const csvUpload = document.getElementById('csvUpload');
+const brsUploadBtn = document.getElementById('brsUploadBtn');
 
 // Build export link when ledger selected and period set
 function updateExportLink(ledgerId) {
@@ -228,6 +219,60 @@ window.addEventListener('load', () => {
     }
 });
 
+// Handle CSV file selection
+csvUpload.addEventListener('change', () => {
+    const ledgerId = brsLedgerSelect.value;
+    if (csvUpload.files.length > 0 && ledgerId) {
+        brsUploadBtn.style.display = 'inline-block';
+    } else {
+        brsUploadBtn.style.display = 'none';
+    }
+});
+
+// Handle CSV upload and reconciliation
+brsUploadBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    const ledgerId = brsLedgerSelect.value;
+    const file = csvUpload.files[0];
+    
+    if (!ledgerId || !file) {
+        alert('Please select a bank account and CSV file.');
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('upload_csv', '1');
+    formData.append('ledger_id', ledgerId);
+    formData.append('csv_file', file);
+    
+    brsUploadBtn.disabled = true;
+    brsUploadBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Processing...';
+    
+    fetch(window.location.pathname, { method: 'POST', body: formData })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                alert(`✓ Reconciliation complete!\n\nMatched: ${data.matched}\nNot matched: ${data.not_matched}\nErrors: ${data.errors}`);
+                csvUpload.value = ''; // Clear file input
+                brsUploadBtn.style.display = 'none';
+                brsUploadBtn.disabled = false;
+                brsUploadBtn.innerHTML = '<i class="bi bi-cloud-upload"></i> Upload & Reconcile';
+                // Reload ledger
+                setTimeout(() => loadBankReconciliation(ledgerId), 200);
+            } else {
+                alert('⚠️ Error: ' + (data.error || 'Unknown error'));
+                brsUploadBtn.disabled = false;
+                brsUploadBtn.innerHTML = '<i class="bi bi-cloud-upload"></i> Upload & Reconcile';
+            }
+        })
+        .catch(err => {
+            console.error('CSV upload error:', err);
+            alert('⚠️ Network or server error: ' + err.message);
+            brsUploadBtn.disabled = false;
+            brsUploadBtn.innerHTML = '<i class="bi bi-cloud-upload"></i> Upload & Reconcile';
+        });
+});
+
 // Handle checkbox updates
 document.addEventListener('change', e => {
     if (e.target.classList.contains('brs-checkbox')) {
@@ -254,45 +299,6 @@ document.addEventListener('change', e => {
             alert('⚠️ Network or server error.');
         });
   }
-});
-
-// Handle bank statement upload
-uploadStatementBtn.addEventListener('click', () => {
-    const ledgerId = brsLedgerSelect.value;
-    const file = bankStatementFile.files[0];
-    if (!ledgerId) {
-        uploadStatus.innerHTML = '<div class="alert alert-warning">Please select a bank account.</div>';
-        return;
-    }
-    if (!file) {
-        uploadStatus.innerHTML = '<div class="alert alert-warning">Please select a file to upload.</div>';
-        return;
-    }
-
-    const formData = new FormData();
-    formData.append('upload_statement', '1');
-    formData.append('ledger_id', ledgerId);
-    formData.append('bank_statement', file);
-
-    uploadStatus.innerHTML = '<div class="text-center text-primary"><div class="spinner-border spinner-border-sm"></div> Uploading and reconciling...</div>';
-
-    fetch(window.location.pathname, { method: 'POST', body: formData })
-        .then(res => res.json())
-        .then(data => {
-            if (data.success) {
-                uploadStatus.innerHTML = '<div class="alert alert-success">Upload successful! Matched: ' + data.matched + ', Unmatched: ' + data.unmatched + '</div>';
-                // Refresh the reconciliation view if the same ledger is selected
-                if (brsLedgerSelect.value === ledgerId) {
-                    loadBankReconciliation(ledgerId);
-                }
-            } else {
-                uploadStatus.innerHTML = '<div class="alert alert-danger">Error: ' + data.error + '</div>';
-            }
-        })
-        .catch(err => {
-            console.error('Upload error:', err);
-            uploadStatus.innerHTML = '<div class="alert alert-danger">Network or server error during upload.</div>';
-        });
 });
 </script>
 </body>

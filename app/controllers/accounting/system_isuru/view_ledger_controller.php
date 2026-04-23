@@ -9,18 +9,10 @@ ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 
-$servername = "localhost";
-$username   = "root";
-$password   = "";
-$database   = "ydf-system";
-
-$conn = new mysqli($servername, $username, $password, $database);
-if ($conn->connect_error) {
-    http_response_code(500);
-    echo "<div class='alert alert-danger'>Database connection failed: " . htmlspecialchars($conn->connect_error) . "</div>";
-    exit;
-}
+require_once __DIR__ . '/../../../config/config.php';
+$conn = getDBConnection();
 $conn->set_charset('utf8mb4');
+ 
 
 // ============================================================================
 // COUNTRY SELECTION HANDLING - FIXED

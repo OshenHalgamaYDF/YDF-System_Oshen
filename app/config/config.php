@@ -1,7 +1,7 @@
 <?php
 // Database configuration
 define('DB_HOST', 'localhost');
-define('DB_NAME', 'db_ydf');
+define('DB_NAME', 'ydf-system');
 define('DB_USER', 'root');
 define('DB_PASS', '');
 

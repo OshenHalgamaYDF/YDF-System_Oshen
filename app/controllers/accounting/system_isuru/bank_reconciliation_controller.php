@@ -1,27 +1,12 @@
 <?php
 // ========================================
-// BANK RECONCILIATION (combined view + AJAX endpoint + ledger export + file upload)
+// BANK RECONCILIATION (combined view + AJAX endpoint + ledger export)
 // Added date range filter (filter_from, filter_to) to AJAX ledger view and export
-// Added automatic reconciliation via bank statement upload
 // ========================================
 session_start(); // Start session for country selection
 
-// Load composer autoload if available
-$autoloadPath = __DIR__ . '/../../../../vendor/autoload.php';
-if (file_exists($autoloadPath)) {
-    require_once $autoloadPath;
-}
-
-$servername = "localhost";
-$username = "root";
-$password = "";
-$database = "ydf-system";
-
-$conn = new mysqli($servername, $username, $password, $database);
-if ($conn->connect_error) {
-    http_response_code(500);
-    die("Connection failed: " . $conn->connect_error);
-}
+require_once __DIR__ . '/../../../config/config.php';
+$conn = getDBConnection();
 $conn->set_charset('utf8mb4');
 
 // ============================================================================
@@ -45,283 +30,215 @@ $country_stmt->close();
 $filter_from = isset($_GET['filter_from']) && $_GET['filter_from'] ? $_GET['filter_from'] : date('Y-01-01');
 $filter_to   = isset($_GET['filter_to']) && $_GET['filter_to'] ? $_GET['filter_to'] : date('Y-m-d');
 
-// --- Handle Bank Statement Upload and Auto-Reconciliation ---
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['upload_statement'])) {
+// --- CSV Upload and Auto-Reconciliation (POST) ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['upload_csv'])) {
     header('Content-Type: application/json; charset=utf-8');
-    $ledger_id = intval($_POST['ledger_id'] ?? 0);
-    if ($ledger_id <= 0) {
-        echo json_encode(['success' => false, 'error' => 'Invalid bank account selected.']);
-        exit;
-    }
-
-    if (!isset($_FILES['bank_statement']) || $_FILES['bank_statement']['error'] !== UPLOAD_ERR_OK) {
-        echo json_encode(['success' => false, 'error' => 'File upload error.']);
-        exit;
-    }
-
-    $file = $_FILES['bank_statement'];
-    $allowed_types = ['text/csv', 'application/pdf', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
-    if (!in_array($file['type'], $allowed_types)) {
-        echo json_encode(['success' => false, 'error' => 'Invalid file type. Only CSV, PDF, or Excel files are allowed.']);
-        exit;
-    }
-
-    $allowed_extensions = ['csv', 'xls', 'xlsx', 'pdf'];
-    $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-    if (!in_array($ext, $allowed_extensions)) {
-        echo json_encode(['success' => false, 'error' => 'Invalid file extension. Please upload CSV, PDF, or Excel.']);
-        exit;
-    }
-
-    // Create upload directory if not exists
-    $upload_dir = __DIR__ . '/../../../uploads/bank_statements/';
-    if (!is_dir($upload_dir)) {
-        mkdir($upload_dir, 0755, true);
-    }
-
-    $filename = 'bank_statement_' . $ledger_id . '_' . time() . '_' . basename($file['name']);
-    $filepath = $upload_dir . $filename;
-
-    if (!move_uploaded_file($file['tmp_name'], $filepath)) {
-        echo json_encode(['success' => false, 'error' => 'Failed to save uploaded file.']);
-        exit;
-    }
-
-    $transactions = [];
-    if ($ext === 'csv') {
-        if (($handle = fopen($filepath, 'r')) !== false) {
-            $header = fgetcsv($handle);
-            while (($data = fgetcsv($handle)) !== false) {
-                if (count($data) < 3) {
-                    continue;
-                }
-
-                $rawDate = trim($data[0]);
-                $rawAmount = trim($data[2]);
-                $date = date('Y-m-d', strtotime(str_replace('/', '-', $rawDate)));
-                if (!$date || $date === '1970-01-01') {
-                    continue;
-                }
-
-                $cleanAmount = str_replace([',', ' ', '₹', 'Rs', 'USD', 'LKR'], '', $rawAmount);
-                $cleanAmount = preg_replace('/[^0-9\.-]/', '', $cleanAmount);
-                if ($cleanAmount === '' || !is_numeric($cleanAmount)) {
-                    continue;
-                }
-
-                $amount = (float)$cleanAmount;
-                if ($amount == 0) {
-                    continue;
-                }
-
-                $type = $amount < 0 ? 'Dr' : 'Cr';
-                $amount = abs($amount);
-                $description = trim($data[1]);
-
-                $transactions[] = [
-                    'date' => $date,
-                    'description' => $description,
-                    'amount' => $amount,
-                    'type' => $type,
-                ];
-            }
-            fclose($handle);
+    
+    try {
+        $ledger_id = intval($_POST['ledger_id'] ?? 0);
+        if ($ledger_id <= 0) {
+            throw new Exception('Invalid ledger_id');
         }
-    } elseif ($ext === 'pdf') {
-        require_once __DIR__ . '/../../../../vendor/autoload.php';
-
-        try {
-            $parser = new \Smalot\PdfParser\Parser();
-            $pdf = $parser->parseFile($filepath);
-            $text = $pdf->getText();
-
-            // Debug logging
-            error_log("Original PDF Text length: " . strlen($text));
-            error_log("First 500 chars: " . substr($text, 0, 500));
-
-            // Clean up the text - remove HTML-like tags and normalize
-            $text = strip_tags($text);
-            $text = preg_replace('/\s+/', ' ', $text);
-            $text = str_replace(['>', '<'], '', $text);
-
-            // Split into lines based on dateable patterns
-            $lines = [];
-            $parts = preg_split('/(?=\d{2}\/\d{2}\/\d{4})/', $text);
-            foreach ($parts as $part) {
-                $part = trim($part);
-                if (!empty($part) && strlen($part) > 10) {
-                    $lines[] = $part;
-                }
-            }
-            if (count($lines) < 5) {
-                $lines = explode("\n", $text);
-            }
-            error_log("Number of potential transaction lines: " . count($lines));
-
-            $transactions = [];
-            $processed = [];
-
-            foreach ($lines as $line) {
-                $line = trim($line);
-                if (empty($line) || strlen($line) < 15 ||
-                    stripos($line, 'statement') !== false ||
-                    stripos($line, 'report') !== false ||
-                    stripos($line, 'page') !== false ||
-                    stripos($line, 'balance') !== false ||
-                    stripos($line, 'client') !== false ||
-                    stripos($line, 'bank') !== false ||
-                    stripos($line, 'account') !== false) {
-                    continue;
-                }
-
-                if (preg_match('/(\d{2}\/\d{2}\/\d{4})/', $line, $dateMatch)) {
-                    $dateStr = $dateMatch[1];
-
-                    if (preg_match_all('/(\d{1,3}(?:,\d{3})*\.\d{2})/', $line, $amountMatches)) {
-                        $amountStr = end($amountMatches[1]);
-                        $amount = (float)str_replace(',', '', $amountStr);
-                        $dateParts = explode('/', $dateStr);
-                        if (count($dateParts) == 3) {
-                            $date = $dateParts[2] . '-' . $dateParts[1] . '-' . $dateParts[0];
-                            $type = 'Dr';
-                            if (preg_match('/(SD|CREDIT|INWARD|TRF FROM|DEPOSIT)/i', $line)) {
-                                $type = 'Cr';
-                            }
-                            $description = str_replace($dateStr, '', $line);
-                            $description = str_replace($amountStr, '', $description);
-                            $description = preg_replace('/\d{1,3}(?:,\d{3})*\.\d{2}/', '', $description);
-                            $description = trim(preg_replace('/\s+/', ' ', $description));
-                            $description = str_replace(['DC', 'SD', 'CEFT', 'HNB', 'TXB', 'CHG'], '', $description);
-                            $description = preg_replace('/[0-9]{10,}/', '', $description);
-                            $description = trim($description);
-                            if (empty($description)) {
-                                $description = 'Bank Transaction';
-                            }
-
-                            $key = $date . '|' . $amount . '|' . substr($description, 0, 20);
-                            if (!isset($processed[$key])) {
-                                $processed[$key] = true;
-                                $transactions[] = [
-                                    'date' => $date,
-                                    'description' => substr($description, 0, 255),
-                                    'amount' => $amount,
-                                    'type' => $type,
-                                ];
-                                error_log("Found transaction: $date | $amount | $type | $description");
-                            }
-                        }
+        
+        if (!isset($_FILES['csv_file']) || $_FILES['csv_file']['error'] !== UPLOAD_ERR_OK) {
+            $err_code = $_FILES['csv_file']['error'] ?? 'unknown';
+            throw new Exception("File upload error: {$err_code}");
+        }
+        
+        $file = $_FILES['csv_file'];
+        $filename = $file['name'];
+        $tmpfile = $file['tmp_name'];
+        
+        if (!file_exists($tmpfile)) {
+            throw new Exception('Temp file does not exist');
+        }
+        
+        // Validate file type
+        $ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+        if (!in_array($ext, ['csv', 'xlsx'])) {
+            throw new Exception('Only CSV and XLSX files are allowed');
+        }
+        
+        // Parse CSV/XLSX file
+        $transactions = [];
+        if ($ext === 'csv') {
+            if (($handle = fopen($tmpfile, 'r')) !== false) {
+                $headers = null;
+                while (($row = fgetcsv($handle, 2000, ',')) !== false) {
+                    if ($headers === null) {
+                        $headers = array_map('strtolower', array_map('trim', $row));
+                        continue;
+                    }
+                    // Filter out empty rows
+                    if (empty(implode('', $row))) continue;
+                    $data = array_combine($headers, $row);
+                    if ($data !== false) {
+                        $transactions[] = $data;
                     }
                 }
+                fclose($handle);
             }
-
-            // Aggressive fallback pattern
-            if (count($transactions) === 0 && preg_match_all('/(\d{2}\/\d{2}\/\d{4})([A-Z]{2}\d+)([\d,]+\.\d{2})/', $text, $matches, PREG_SET_ORDER)) {
-                foreach ($matches as $match) {
-                    $dateParts = explode('/', $match[1]);
-                    $date = $dateParts[2] . '-' . $dateParts[1] . '-' . $dateParts[0];
-                    $amount = (float)str_replace(',', '', $match[3]);
-                    $key = $date . '|' . $amount;
-                    if (!isset($processed[$key])) {
-                        $processed[$key] = true;
-                        $transactions[] = [
-                            'date' => $date,
-                            'description' => 'Bank Transaction Ref: ' . $match[2],
-                            'amount' => $amount,
-                            'type' => (strpos($match[2], 'SD') !== false) ? 'Cr' : 'Dr',
-                        ];
-                    }
+        } elseif ($ext === 'xlsx') {
+            // Check if PhpSpreadsheet is available
+            $autoload = __DIR__ . '/../../../../vendor/autoload.php';
+            if (!file_exists($autoload)) {
+                throw new Exception('PhpSpreadsheet library not installed');
+            }
+            require_once $autoload;
+            
+            if (!class_exists('PhpOffice\PhpSpreadsheet\Reader\Xlsx')) {
+                throw new Exception('PhpSpreadsheet Xlsx Reader not found');
+            }
+            
+            $reader = new \PhpOffice\PhpSpreadsheet\Reader\Xlsx();
+            $spreadsheet = $reader->load($tmpfile);
+            $worksheet = $spreadsheet->getActiveSheet();
+            $headers = null;
+            foreach ($worksheet->getRowIterator() as $row) {
+                $rowData = [];
+                foreach ($row->getCellIterator() as $cell) {
+                    $rowData[] = $cell->getValue();
+                }
+                if ($headers === null) {
+                    $headers = array_map('strtolower', array_map('trim', $rowData));
+                    continue;
+                }
+                if (empty(implode('', $rowData))) continue; // Skip empty rows
+                $data = array_combine($headers, $rowData);
+                if ($data !== false) {
+                    $transactions[] = $data;
                 }
             }
-
-            // Deduplicate
-            $unique = [];
-            foreach ($transactions as $txn) {
-                $key = $txn['date'] . '|' . $txn['amount'] . '|' . $txn['type'];
-                if (!isset($unique[$key])) {
-                    $unique[$key] = $txn;
-                }
-            }
-            $transactions = array_values($unique);
-
-            error_log("Final transaction count: " . count($transactions));
-
-            if (count($transactions) === 0) {
-                $debug_file = __DIR__ . '/../../../uploads/bank_statements/debug_' . time() . '.txt';
-                file_put_contents($debug_file, $text);
-                echo json_encode([
-                    'success' => false,
-                    'error' => 'Could not parse PDF transactions. The file has been saved for debugging. Please try exporting as CSV instead.'
-                ]);
-                exit;
-            }
-
-        } catch (Exception $e) {
-            error_log("PDF Parser Exception: " . $e->getMessage());
-            echo json_encode([
-                'success' => false,
-                'error' => 'PDF parsing failed: ' . $e->getMessage()
-            ]);
-            exit;
         }
-    }
-
-    // Auto-reconcile: Match with voucher entries
-    $matched = 0;
-    $unmatched = 0;
-    foreach ($transactions as $txn) {
-        $match_sql = "
-            SELECT ve.entry_id
-            FROM voucher_entries ve
-            JOIN vouchers v ON ve.voucher_id = v.voucher_id
-            LEFT JOIN bank_reconciliation br ON br.voucher_entry_id = ve.entry_id
-            WHERE ve.ledger_id = ? AND v.date = ? AND ve.amount = ? AND ve.type = ? AND (br.is_cleared IS NULL OR br.is_cleared = 0)
-            LIMIT 1
-        ";
-        $match_stmt = $conn->prepare($match_sql);
-        $match_stmt->bind_param("isds", $ledger_id, $txn['date'], $txn['amount'], $txn['type']);
-        $match_stmt->execute();
-        $match_res = $match_stmt->get_result();
-
-        if ($match_res->num_rows === 0) {
-            // Fallback: If type mismatch or missing type, try date+amount only
-            $fallback_sql = "
-                SELECT ve.entry_id
-                FROM voucher_entries ve
+        
+        if (empty($transactions)) {
+            throw new Exception('No transactions found in file');
+        }
+        
+        // Match transactions with voucher entries and auto-reconcile
+        $matched = 0;
+        $not_matched = 0;
+        $errors = 0;
+        
+        foreach ($transactions as $tx) {
+            // Detect column names (flexible parsing)
+            $date_col = null;
+            $amount_col = null;
+            $narration_col = null;
+            
+            foreach (array_keys($tx) as $col) {
+                if (in_array($col, ['date', 'transaction date', 'post date', 'posting date'])) {
+                    $date_col = $col;
+                }
+                if (in_array($col, ['amount', 'debit', 'credit', 'transaction amount', 'value', 'trans. amount'])) {
+                    $amount_col = $col;
+                }
+                if (in_array($col, ['description', 'narration', 'memo', 'details', 'reference', 'particulars'])) {
+                    $narration_col = $col;
+                }
+            }
+            
+            if (!$date_col || !$amount_col) {
+                $errors++;
+                continue;
+            }
+            
+            $tx_date = trim($tx[$date_col] ?? '');
+            $tx_amount_raw = trim($tx[$amount_col] ?? '0');
+            
+            // Clean amount string
+            $tx_amount = (float)str_replace([',', ' ', 'Rs', 'Rs.'], '', $tx_amount_raw);
+            if ($tx_amount == 0) {
+                $errors++;
+                continue;
+            }
+            
+            // Parse date
+            if (empty($tx_date)) {
+                $errors++;
+                continue;
+            }
+            
+            $timestamp = strtotime($tx_date);
+            if ($timestamp === false) {
+                $errors++;
+                continue;
+            }
+            $tx_date = date('Y-m-d', $timestamp);
+            
+            // Find matching voucher entry (by date ±2 days, amount, and ledger)
+            $search_from = date('Y-m-d', strtotime($tx_date . ' -2 days'));
+            $search_to = date('Y-m-d', strtotime($tx_date . ' +2 days'));
+            
+            $match_sql = "
+                SELECT ve.entry_id FROM voucher_entries ve
                 JOIN vouchers v ON ve.voucher_id = v.voucher_id
                 LEFT JOIN bank_reconciliation br ON br.voucher_entry_id = ve.entry_id
-                WHERE ve.ledger_id = ? AND v.date = ? AND ve.amount = ? AND (br.is_cleared IS NULL OR br.is_cleared = 0)
+                WHERE ve.ledger_id = ? 
+                AND v.date >= ? AND v.date <= ?
+                AND ABS(ve.amount - ?) < 0.01
+                AND COALESCE(br.is_cleared, 0) = 0
                 LIMIT 1
             ";
-            $fallback_stmt = $conn->prepare($fallback_sql);
-            $fallback_stmt->bind_param("isd", $ledger_id, $txn['date'], $txn['amount']);
-            $fallback_stmt->execute();
-            $match_res = $fallback_stmt->get_result();
-            $fallback_stmt->close();
+            
+            $match_stmt = $conn->prepare($match_sql);
+            if (!$match_stmt) {
+                $errors++;
+                continue;
+            }
+            
+            $match_stmt->bind_param("issd", $ledger_id, $search_from, $search_to, $tx_amount);
+            $match_stmt->execute();
+            $match_result = $match_stmt->get_result();
+            
+            if ($match_result && $match_result->num_rows > 0) {
+                $match_row = $match_result->fetch_assoc();
+                $entry_id = $match_row['entry_id'];
+                
+                // Check if already reconciled
+                $check = $conn->prepare("SELECT reconciliation_id FROM bank_reconciliation WHERE voucher_entry_id = ?");
+                $check->bind_param("i", $entry_id);
+                $check->execute();
+                $check->store_result();
+                $exists = $check->num_rows > 0;
+                $check->close();
+                
+                // Update or insert reconciliation
+                $cleared_date = date('Y-m-d');
+                if ($exists) {
+                    $up_stmt = $conn->prepare("UPDATE bank_reconciliation SET is_cleared = 1, cleared_date = ? WHERE voucher_entry_id = ?");
+                    $up_stmt->bind_param("si", $cleared_date, $entry_id);
+                } else {
+                    $up_stmt = $conn->prepare("INSERT INTO bank_reconciliation (voucher_entry_id, is_cleared, cleared_date) VALUES (?, 1, ?)");
+                    $up_stmt->bind_param("is", $entry_id, $cleared_date);
+                }
+                
+                if ($up_stmt->execute()) {
+                    $matched++;
+                } else {
+                    $errors++;
+                }
+                $up_stmt->close();
+            } else {
+                $not_matched++;
+            }
+            
+            $match_stmt->close();
         }
-
-        if ($match_res->num_rows > 0) {
-            $entry = $match_res->fetch_assoc();
-            $entry_id = $entry['entry_id'];
-            $update_stmt = $conn->prepare("INSERT INTO bank_reconciliation (voucher_entry_id, is_cleared, cleared_date) VALUES (?, 1, ?) ON DUPLICATE KEY UPDATE is_cleared = 1, cleared_date = ?");
-            $update_stmt->bind_param("iss", $entry_id, date('Y-m-d'), date('Y-m-d'));
-            $update_stmt->execute();
-            $update_stmt->close();
-            $matched++;
-        } else {
-            $unmatched++;
-        }
-
-        $match_stmt->close();
+        
+        echo json_encode([
+            'success' => true,
+            'matched' => $matched,
+            'not_matched' => $not_matched,
+            'errors' => $errors
+        ]);
+    } catch (Exception $e) {
+        http_response_code(400);
+        echo json_encode([
+            'success' => false,
+            'error' => $e->getMessage()
+        ]);
     }
-
-    // Optionally, store the statement in DB (create table if needed)
-    // For now, just log the upload
-    $log_stmt = $conn->prepare("INSERT INTO bank_statement_uploads (ledger_id, filename, uploaded_at, matched, unmatched) VALUES (?, ?, NOW(), ?, ?)");
-    $log_stmt->bind_param("isii", $ledger_id, $filename, $matched, $unmatched);
-    $log_stmt->execute();
-    $log_stmt->close();
-
-    echo json_encode(['success' => true, 'matched' => $matched, 'unmatched' => $unmatched]);
     exit;
 }
 
